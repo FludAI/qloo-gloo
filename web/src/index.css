@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .card { @apply rounded-2xl border border-line bg-white/70 p-5 sm:p-6; }
+  .step { @apply font-mono text-xs uppercase tracking-[0.18em] text-gloo-deep; }
+  .btn { @apply inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition hover:bg-gloo-deep disabled:cursor-not-allowed disabled:opacity-40; }
+  .btn-ghost { @apply inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition hover:border-ink hover:text-ink; }
+  .field { @apply w-full rounded-xl border border-line bg-paper px-3 py-2 text-base outline-none focus:border-gloo; }
+}
