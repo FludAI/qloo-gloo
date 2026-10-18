@@ -5,7 +5,7 @@
   "engines": { "node": ">=22.19.0" },
   "scripts": {
     "dev": "node --env-file-if-exists=../.env --watch src/index.mjs",
-    "dev:mock": "QLOO_MOCK=1 node --env-file-if-exists=../.env --watch src/index.mjs",
+    "dev:mock": "node --env-file-if-exists=../.env --watch src/index.mjs --mock",
     "start": "node --env-file-if-exists=../.env src/index.mjs"
   },
   "dependencies": {

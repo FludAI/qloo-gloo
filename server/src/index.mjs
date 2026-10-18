@@ -6,7 +6,7 @@ import { toItems } from "./normalize.mjs";
 import { mockQloo } from "./mock.mjs";
 import { buildLesson } from "./gloo.mjs";
 
-const MOCK = process.env.QLOO_MOCK === "1";
+const MOCK = process.env.QLOO_MOCK === "1" || process.argv.includes("--mock");
 const PORT = Number(process.env.PORT ?? 8787);
 const app = express();
 app.use(express.json({ limit: "32kb" }));

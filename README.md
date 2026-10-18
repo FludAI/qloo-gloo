@@ -34,7 +34,28 @@ provenance panel        ◀────── {request, envelope, items}
 
 ## Setup from a clean environment
 
-Requires Node.js 22.19+ and an event-issued Qloo key.
+Requires Node.js 22.19+ and an event-issued Qloo key. Windows (PowerShell) and
+macOS/Linux both work.
+
+### Windows (PowerShell)
+
+```powershell
+winget install OpenJS.NodeJS.LTS        # then open a NEW terminal; node --version >= 22.19
+npm install --global @qloo/qloo-harness
+setx QLOO_BASE_URL https://hackathon.api.qloo.com
+setx QLOO_TRUSTED_BASE_URL https://hackathon.api.qloo.com
+# close and reopen PowerShell so the variables load
+qloo setup --qloo
+qloo setup --status
+
+git clone <this repo> qloo-gloo; cd qloo-gloo
+Copy-Item .env.example .env
+npm install
+npm run dev
+npm run smoke                            # in a second terminal
+```
+
+### macOS / Linux
 
 ```sh
 npm install --global @qloo/qloo-harness   # needs 0.1.26+
