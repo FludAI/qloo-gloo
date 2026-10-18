@@ -6,3 +6,8 @@ dist/
 .DS_Store
 *.log
 .qloo/
+
+# Proprietary Gloo material never enters this public repo
+private/
+*[Hh]andoff*.md
+gloo-engine/

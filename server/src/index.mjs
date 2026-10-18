@@ -4,7 +4,20 @@ import { findPersonalData } from "./guard.mjs";
 import { cached, remember } from "./cache.mjs";
 import { toItems } from "./normalize.mjs";
 import { mockQloo } from "./mock.mjs";
-import { buildLesson } from "./gloo.mjs";
+import { buildLesson as openBuildLesson } from "./gloo.mjs";
+
+// Optional private engine, loaded from outside this repo (e.g. GLOO_ENGINE_MODULE=../gloo-engine/index.mjs).
+// It must export buildLesson with the same contract as ./gloo.mjs. Absent = open default.
+let buildLesson = openBuildLesson;
+let ENGINE = "gloo-open-default";
+if (process.env.GLOO_ENGINE_MODULE) {
+  const { pathToFileURL, fileURLToPath } = await import("node:url");
+  const { resolve } = await import("node:path");
+  const repoRoot = fileURLToPath(new URL("../../", import.meta.url)); // relative paths resolve from the repo root
+  const mod = await import(pathToFileURL(resolve(repoRoot, process.env.GLOO_ENGINE_MODULE)).href);
+  buildLesson = mod.buildLesson;
+  ENGINE = mod.ENGINE_NAME ?? "gloo-private";
+}
 
 const MOCK = process.env.QLOO_MOCK === "1" || process.argv.includes("--mock");
 const PORT = Number(process.env.PORT ?? 8787);
@@ -29,9 +42,9 @@ const reply = (res, request, envelope) =>
   res.status(envelope.status === "error" ? 502 : 200).json({ request, envelope, items: toItems(envelope) });
 
 app.get("/api/health", async (_req, res) => {
-  if (MOCK) return res.json({ mode: "mock", qloo_ready: false });
+  if (MOCK) return res.json({ mode: "mock", qloo_ready: false, engine: ENGINE });
   try {
-    res.json({ mode: "live", qloo_ready: (await readiness()).ready, base_url: process.env.QLOO_BASE_URL ?? null });
+    res.json({ mode: "live", qloo_ready: (await readiness()).ready, base_url: process.env.QLOO_BASE_URL ?? null, engine: ENGINE });
   } catch (e) {
     res.status(500).json({ mode: "live", qloo_ready: false, error: e.message });
   }
