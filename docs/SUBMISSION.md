@@ -1,27 +1,45 @@
-# Devpost submission draft (due Oct 30, 2026)
+# Devpost submission (due Oct 30, 2026)
 
-Maps to the six items in qloo-hackathon-kit/docs/SUBMISSION.md.
+Required: live demo URL · public repo URL · text description · external hosting
+· open-source license visible in the repo's About panel.
 
-## 1. Problem
-_TODO: Abstract concepts stick when taught through frames a learner already
-cares about, but tutors and courses pick one generic analogy for everyone._
+## Links
+- Demo: _[Cloud Run URL]_
+- Repo: _[GitHub URL]_
 
-## 2. Qloo workflows used and why
-- `find_tags`: turns a learner's interest word into candidate tag URNs; the
-  learner confirms the meaning (e.g. which of several "Jazz" tags).
-- `recommend` with `signal_tags`: finds entities that groups with that taste
-  tend to enjoy, used as analogy anchors.
-- _TODO: add any others used (e.g. `entity_tags` to explain why an anchor fits)._
+## Description (draft)
 
-## 3. Redacted request-to-result walkthrough
-_TODO: paste one real `find_tags` and `recommend` pair from the provenance panel.
-State which candidate was chosen and why._
+**Gloo × Qloo: learn hard terms through things you already know.**
 
-## 4. Demo
-_TODO: video or screenshots. Check: no key, no personal data, mode badge shows "Qloo live"._
+Gloo teaches complex terms by first using the meaning already inside them
+(*chole* = bile, *cyst* = sac, *kin* = movement), then attaching each part to a
+hook the learner recognizes. This extension adds a cue agent grounded in Qloo's
+taste graph.
 
-## 5. Setup
-See README "Setup from a clean environment".
+The learner names a few public things they know. The agent (Claude with Qloo
+tools) resolves them with `describe`, asks `recommend` what people with that
+taste also tend to know, and proposes up to three cues. Each cue is tied to a
+specific sound, meaning or step: "Breyers ≈ Brier", "Sister ≈ cyst". The
+learner confirms each one, then practices with the cues hidden. Scoring is
+deterministic, and progress is tracked per skill.
 
-## 6. Known limitations
-See README "Limitations". _TODO: add anything learned from live results._
+**Why Qloo matters:** an LLM can invent analogies, but it guesses what a learner
+will recognize. Qloo supplies which cultural entities a taste cluster actually
+knows. The agent may keep only IDs that Qloo returned, and the learner, not an
+affinity score, decides what's familiar. Every Qloo call is visible in a
+provenance panel.
+
+Two complete lessons: cholecystokinin and its word family, and the Brier score
+(with the same scoring operation carried across weather, finance, games, ML and
+Gloo's own recall forecasts).
+
+## Request-to-result walkthrough
+_TODO after the live key works: paste one `describe` + `recommend` pair from
+the provenance panel, the agent's three proposals, and which one the learner
+confirmed._
+
+## Setup
+See README "Run it" and docs/DEPLOY.md.
+
+## Limitations
+See README "Limitations".

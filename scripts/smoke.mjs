@@ -1,24 +1,34 @@
-// End-to-end check of the backend flow: tags -> anchors -> lesson.
-// Usage: start the server (npm run dev or dev:mock), then `npm run smoke [interest]`.
+// End-to-end check against a running server: health -> lesson -> practice -> agent.
+// Usage: npm run smoke            (http://localhost:8787)
+//        SMOKE_URL=https://your-demo.run.app npm run smoke
 const BASE = process.env.SMOKE_URL ?? "http://localhost:8787";
-const interest = process.argv[2] ?? "jazz";
-const post = (p, b) => fetch(BASE + p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json());
+let cookie = "";
+async function call(method, path, body) {
+  const res = await fetch(BASE + path, {
+    method, headers: { ...(cookie && { cookie }), ...(body && { "content-type": "application/json" }) },
+    body: body && JSON.stringify(body),
+  });
+  const set = res.headers.get("set-cookie");
+  if (set) cookie = set.split(";")[0];
+  return { status: res.status, body: await res.json() };
+}
+const ok = (cond, label) => { console.log(`${cond ? "PASS" : "FAIL"}  ${label}`); if (!cond) process.exitCode = 1; };
 
-const health = await fetch(`${BASE}/api/health`).then((r) => r.json());
-console.log("health:", health);
+const health = (await call("GET", "/api/health")).body;
+console.log("health:", JSON.stringify({ qloo: health.qloo, agent: health.agent }));
+ok((await call("GET", "/api/terms/brier-score")).body.locked === true, "lesson locked before first attempt");
+await call("POST", "/api/terms/brier-score/first-attempt", { response: "how good a forecast was" });
+ok((await call("GET", "/api/terms/brier-score")).body.locked === false, "lesson unlocks after first attempt");
+const a = (await call("POST", "/api/attempts", { prompt_id: "brier-mean", response: "0.065", idempotency_key: `smoke-${Date.now()}` })).body;
+ok(a.outcome === "correct" && a.independent, "Brier mean 0.065 scored correct and independent");
 
-const tags = await post("/api/tags", { query: interest });
-console.log(`find_tags(${interest}) -> ${tags.envelope.status}:`, tags.items.map((t) => `${t.name} [${t.type}]`));
-if (!tags.items.length) process.exit(1);
+const describe = (await call("POST", "/api/cues/resolve", { entity: "Breyers", type: "brand" })).body;
+console.log(`qloo describe(Breyers) -> ${describe.envelope.status}:`, describe.envelope.error ? `${describe.envelope.error.code}: ${describe.envelope.summary}` : describe.items.slice(0, 3).map((i) => `${i.name} [${i.id}]`));
+ok(describe.envelope.status !== "error", "Qloo describe reachable");
 
-// A real UI makes the learner confirm; the smoke test takes the first candidate.
-const chosen = tags.items.slice(0, 1);
-const anchors = await post("/api/anchors", { tag_urns: chosen.map((t) => t.id), target_type: "movie" });
-console.log(`recommend -> ${anchors.envelope.status}:`, anchors.items.map((a) => a.name));
-
-const lesson = await post("/api/lesson", { concept: "compound interest", tags: chosen, anchors: anchors.items });
-console.log("lesson hooks:", lesson.hooks?.map((h) => `${h.role}: ${h.anchor}`));
-
-const blocked = await post("/api/tags", { query: "someone@example.com" });
-console.log("PII guard:", blocked.envelope.error?.code);
-process.exit(blocked.envelope.error?.code === "PERSONAL_DATA_BLOCKED" ? 0 : 1);
+const agent = (await call("POST", "/api/cues/agent", { term_id: "brier-score", familiar: ["Breyers", "Moneyball"] })).body;
+console.log(`agent -> ${agent.status}${agent.model ? ` (${agent.model})` : ""}`);
+for (const s of agent.trace ?? []) console.log(`   ${s.tool} ${JSON.stringify(s.args)} -> ${s.status} · ${s.result_count}`);
+for (const c of agent.cues ?? []) console.log(`   cue [${c.role}] ${c.label} · ${c.source}: ${c.connection}`);
+ok(["ok", "unavailable"].includes(agent.status), "agent returned a usable state");
+await call("DELETE", "/api/learner");

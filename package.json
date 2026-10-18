@@ -1,15 +1,21 @@
 {
   "name": "qloo-gloo",
   "private": true,
-  "description": "Gloo × Qloo: taste-anchored learning. Qloo Agentic Hackathon entry.",
-  "workspaces": ["server", "web"],
-  "engines": { "node": ">=22.19.0" },
+  "description": "Gloo \u00d7 Qloo: taste-anchored learning. Qloo Agentic Hackathon entry.",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm:dev -w server\" \"npm:dev -w web\"",
     "dev:mock": "concurrently -n server,web -c blue,magenta \"npm:dev:mock -w server\" \"npm:dev -w web\"",
     "build": "npm run build -w web",
     "start": "npm start -w server",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "test": "npm test -w server"
   },
   "devDependencies": {
     "concurrently": "9.1.2"

@@ -21,16 +21,23 @@ export function mockQloo(op, args) {
       { urn: `urn:tag:style:place:${q}`, name: `${title} bar`, subtype: "style/place" },
     ].slice(0, args.limit ?? 5), `Mock: candidate tags for "${q}"`);
   }
+  if (op === "describe") {
+    const name = String(args.entity ?? "");
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    return base("describe", [{ entity_id: `mock-${slug}`, name, type: `urn:entity:${args.type ?? "brand"}`,
+      description: "Fixture record. Not Qloo data." }], `Mock: resolved "${name}"`);
+  }
   if (op === "recommend") {
     const t = args.target_type ?? "movie";
     const names = {
       movie: ["Whiplash", "La La Land", "Round Midnight", "Bird", "Soul"],
       book: ["Coltrane: The Story of a Sound", "Kind of Blue (33 1/3)", "The Jazz Standards", "Really the Blues", "Blues People"],
       artist: ["Miles Davis", "Nina Simone", "Thelonious Monk", "Kamasi Washington", "Esperanza Spalding"],
+      brand: ["Ben & Jerry's", "Häagen-Dazs", "Coca-Cola", "LinkedIn", "Netflix"],
       podcast: ["Jazz Night in America", "The Jazz Session", "Song Exploder", "Switched On Pop", "Strong Songs"],
     }[t] ?? ["Example A", "Example B", "Example C"];
     return base("recommend", names.slice(0, args.limit ?? 5).map((name, i) => ({
-      entity_id: `00000000-0000-4000-8000-00000000000${i}`, name, type: `urn:entity:${t}`,
+      entity_id: `mock-rec-${t}-${i}`, name, type: `urn:entity:${t}`,
       affinity: Number((0.92 - i * 0.07).toFixed(2)),
       explanation: "Fixture: shares signal tags with the confirmed taste profile.",
     })), `Mock: ${t} recommendations for the confirmed tags`);

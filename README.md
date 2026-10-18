@@ -1,106 +1,124 @@
-# qloo-gloo
+# Gloo × Qloo
 
-**Gloo × Qloo: taste-anchored learning.** An open extension for
-[Gloo](https://gloo.news) built for the Qloo Agentic Hackathon.
+**An agent that teaches hard terms through things you already know.**
+Built for the Qloo Agentic Hackathon as an open extension of [Gloo](https://gloo.news).
 
-Gloo helps people learn complex concepts faster and retain them longer. This
-extension uses Qloo's aggregate taste data to choose the *frames* a lesson is
-taught through: a learner names a concept ("compound interest") and a taste
-expressed as a concept ("jazz"), confirms which Qloo tag they mean, and Gloo
-builds analogy hooks around entities that people with that taste tend to enjoy.
+> Patent pending. See [PATENTS.md](PATENTS.md).
 
-> Gloo's proprietary learning engine is not in this repository. `server/src/gloo.mjs`
-> is the integration seam and ships an open default so the project runs end to end.
+**Live demo:** _[URL after deploy]_
 
-## How it works
+## What it does
+
+Gloo first pulls the memory value already inside a term (*chole* = bile,
+*cyst* = sac, *kin* = movement), then gives each part a hook the learner
+already knows. Two complete sample lessons ship here: **cholecystokinin** and its
+word family, and the **Brier score**.
+
+The learner:
+
+1. Makes a first attempt. It's saved before the lesson opens.
+2. Reads the lesson: real meanings, sources, and a typed map that keeps
+   *memory cues* visibly separate from *actual meanings*.
+3. Names a few public things they know (brands, films, books, shows). **The cue
+   agent** resolves them in Qloo, asks Qloo what people with that taste also tend
+   to know, and proposes up to three cues. Each cue is tied to one part of the
+   term: a sound, a meaning, or a step.
+4. Confirms each cue ("I recognize this") or declines it. Qloo never decides
+   what the learner knows.
+5. Practices one prompt at a time, with cues hidden. Scoring is deterministic and
+   happens on the server. Hinted answers never count as independent recall.
+6. Sees progress per skill (meaning, operation, transfer, pronunciation), with a
+   spaced-review schedule.
+
+## Why it's Qloo-powered
+
+An LLM alone can invent an analogy, but it guesses which references a learner
+will recognize. Qloo's taste graph supplies **which cultural entities a
+learner's taste cluster actually knows**, with real entity IDs. The agent then
+does the part an LLM is good at: checking whether an entity's *name* or *core
+idea* can carry a specific sound or meaning ("Breyers ≈ Brier", "Sister ≈
+cyst"). Without Qloo, the agent can only offer generic hooks.
+
+Guards on that reasoning:
+
+- The agent may only keep Qloo IDs that Qloo actually returned in that run.
+  Invented IDs are stripped, and the cue is labeled "no verified Qloo ID".
+- Qloo affinity never sets familiarity, mastery or retention. The learner
+  confirms every cue.
+- The provenance panel shows every Qloo request and the full response behind
+  the cues.
+
+## Architecture
 
 ```
-Browser (React + Vite)          Backend (Express, Node 22)           Qloo
-───────────────────────         ───────────────────────────          ─────────────────────
-concept + interest word  ─────▶ PII guard ─▶ cache ─▶ qloo mcp ────▶ qloo_find_tags
-learner confirms tag(s)  ─────▶                       qloo mcp ────▶ qloo_recommend
-                         ─────▶ gloo.buildLesson(concept, tags, anchors)   (no Qloo call)
-provenance panel        ◀────── {request, envelope, items}
+Browser (React 18 + Vite 5 + Tailwind 3.4)
+   │  /api/* only — never sees a key
+Express server (Node 22)
+   ├─ content/        reviewed term packets (answers never leave the server)
+   ├─ assess.mjs      deterministic scoring, Brier math with validation
+   ├─ scheduler.mjs   per-skill spaced review, injected clock, versioned policy
+   ├─ db.mjs          SQLite (node:sqlite), server-issued sessions
+   ├─ agent.mjs       Claude tool-use loop ──► Qloo tools
+   └─ qloo.mjs        one long-lived `qloo mcp` process (@qloo/qloo-harness)
+                         └─► hackathon.api.qloo.com
 ```
 
-- The browser never sees a Qloo key. It calls `/api/*` on our backend only.
-- The backend keeps one long-lived `qloo mcp` process and forwards `process.env`.
-- Inputs that look like emails, phone numbers, or device IDs are blocked before
-  any Qloo call (`server/src/guard.mjs`).
-- Successful results are cached for 30 minutes; retries happen at most once and
-  only when Qloo marks an error `retryable`.
-- All six envelope statuses (`ok`, `empty`, `needs_input`, `partial`,
-  `degraded`, `error`) are shown to the user as they are.
+Qloo workflows used: `describe` (resolve what the learner names), `recommend`
+(what that taste cluster also knows), plus `entity_tags` / `find_tags` when the
+agent needs them.
 
-## Setup from a clean environment
+## Run it
 
-Requires Node.js 22.19+ and an event-issued Qloo key. Windows (PowerShell) and
-macOS/Linux both work.
+Needs Node.js 22.19+, the Qloo harness, a Qloo hackathon key, and optionally an
+Anthropic API key for the agent.
 
-### Windows (PowerShell)
+**Git Bash / macOS / Linux**
 
-```powershell
-winget install OpenJS.NodeJS.LTS        # then open a NEW terminal; node --version >= 22.19
+```bash
 npm install --global @qloo/qloo-harness
-setx QLOO_BASE_URL https://hackathon.api.qloo.com
-setx QLOO_TRUSTED_BASE_URL https://hackathon.api.qloo.com
-# close and reopen PowerShell so the variables load
-qloo setup --qloo
-qloo setup --status
-
-git clone <this repo> qloo-gloo; cd qloo-gloo
-Copy-Item .env.example .env
-npm install
-npm run dev
-npm run smoke                            # in a second terminal
-```
-
-### macOS / Linux
-
-```sh
-npm install --global @qloo/qloo-harness   # needs 0.1.26+
-export QLOO_BASE_URL=https://hackathon.api.qloo.com
-export QLOO_TRUSTED_BASE_URL=https://hackathon.api.qloo.com
-qloo setup --qloo        # key stays in the harness's private config
-qloo setup --status      # expect "Qloo data: ready"
+echo 'export QLOO_BASE_URL=https://hackathon.api.qloo.com' >> ~/.bashrc
+echo 'export QLOO_TRUSTED_BASE_URL=https://hackathon.api.qloo.com' >> ~/.bashrc
+source ~/.bashrc
+qloo setup --qloo && qloo setup --status      # expect "Qloo data: ready"
 
 git clone <this repo> qloo-gloo && cd qloo-gloo
-cp .env.example .env
+cp .env.example .env                           # add ANTHROPIC_API_KEY for the agent
 npm install
-npm run dev              # server :8787, web :5173
-npm run smoke            # in a second terminal: tags -> anchors -> lesson
+npm run dev                                    # http://localhost:5173
+npm run smoke                                  # second terminal
+npm test                                       # 18 domain + API tests
 ```
 
-No key yet? `npm run dev:mock` serves clearly labeled fixture data so you can
-work on the UI. Mock results are never presented as Qloo data.
+**PowerShell:** the same, but use `setx QLOO_BASE_URL ...` (then open a new
+window) and `Copy-Item .env.example .env`.
 
-## API
+**No keys yet?** `npm run dev:mock` serves labeled fixture data with a
+synthetic agent.
 
-| Route | Qloo workflow | Purpose |
-| --- | --- | --- |
-| `GET /api/health` | `qloo_capabilities` | Readiness, no Qloo call |
-| `POST /api/tags` `{query}` | `find_tags` | Candidate tags for an interest word |
-| `POST /api/anchors` `{tag_urns, target_type}` | `recommend` | Entities that taste cluster tends to like |
-| `POST /api/lesson` `{concept, tags, anchors}` | none | Gloo lesson scaffold |
-| `POST /api/qloo/:op` | any of the nine | Allow-listed passthrough for other workflows |
+**Deploy:** [docs/DEPLOY.md](docs/DEPLOY.md) (Google Cloud Run, one container).
 
-## Deploy
+## Status
 
-Run the server on a VM or container with Node 22.19+, the harness installed,
-and `QLOO_API_KEY` set as a secret. Serverless functions are not supported by
-`qloo mcp`. Serve `web/dist` statically (or from the same server) and point it
-at the backend.
+| Feature | Status |
+| --- | --- |
+| Both sample lessons, first attempt, typed map, practice, per-skill progress | Implemented |
+| Deterministic scoring, hint independence, idempotent attempts, session isolation, export/delete | Implemented, tested |
+| Qloo path through `qloo mcp` | Implemented; reached the hackathon API (401 with a test key). Live results pending key |
+| Cue agent (Claude + Qloo tools, ID verification) | Implemented; loop tested against a fake provider. Live run pending key |
+| Spaced review schedule | Implemented (pilot policy; simulated time is not retention evidence) |
+| Speech scoring, camera/OCR, glasses input, encounter detection, rewards | Not in this build; shown as unavailable |
 
 ## Limitations
 
-- Anchors reflect aggregate affinity for a tag, not an individual learner's
-  preferences, identity, or future behavior.
-- A semantic tag match is a candidate. The UI requires the learner to confirm it.
-- The open lesson builder is a template; lesson quality in production comes from
-  Gloo's engine.
-- The PII guard catches common patterns only. The UI asks for concepts, not
-  personal details.
+- Qloo results describe what groups tend to like, not what one person knows.
+- Sound cues are approximate memory aids, not phonetics or etymology.
+- The review schedule and mastery rule are pilot product choices, not a proven
+  optimum.
+- Text answers are scored by reviewed rules. Unmatched paraphrases are marked
+  "uncertain" and don't count either way.
+- The demo keeps one SQLite database on one Cloud Run instance. A redeploy
+  starts fresh.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE) and [PATENTS.md](PATENTS.md).

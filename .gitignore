@@ -11,3 +11,4 @@ dist/
 private/
 *[Hh]andoff*.md
 gloo-engine/
+server/data/
