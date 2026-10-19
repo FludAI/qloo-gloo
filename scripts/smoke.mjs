@@ -1,6 +1,8 @@
-// End-to-end check against a running server: health -> lesson -> practice -> agent.
-// Usage: npm run smoke            (http://localhost:8787)
+// End-to-end check against a running server: health -> lesson -> practice -> gloo it -> (optional) Qloo + agent.
+// Usage: npm run smoke                                   (http://localhost:8787)
 //        SMOKE_URL=https://your-demo.run.app npm run smoke
+//        SMOKE_PASSCODE=... unlocks a passcode-gated demo; SMOKE_QLOO=1 also runs the Qloo describe and agent steps
+//        (those spend event credit on a cache miss, so they are off by default).
 const BASE = process.env.SMOKE_URL ?? "http://localhost:8787";
 // Cookie jar keyed by name: hosts like Cloud Run add their own cookies (e.g. session affinity) alongside gloo_sid.
 const jar = new Map();
@@ -19,7 +21,11 @@ async function call(method, path, body) {
 const ok = (cond, label) => { console.log(`${cond ? "PASS" : "FAIL"}  ${label}`); if (!cond) process.exitCode = 1; };
 
 const health = (await call("GET", "/api/health")).body;
-console.log("health:", JSON.stringify({ qloo: health.qloo, agent: health.agent }));
+console.log("health:", JSON.stringify({ qloo: health.qloo, agent: health.agent, stt: health.stt, camera: health.camera, gated: health.gated }));
+if (health.gated) {
+  if (!process.env.SMOKE_PASSCODE) console.log("note: demo is passcode-gated; set SMOKE_PASSCODE to test metered paths");
+  else ok((await call("POST", "/api/unlock", { code: process.env.SMOKE_PASSCODE })).body.unlocked === true, "passcode unlocks the session");
+}
 ok((await call("GET", "/api/terms/brier-score")).body.locked === true, "lesson locked before first attempt");
 await call("POST", "/api/terms/brier-score/first-attempt", { response: "how good a forecast was" });
 ok((await call("GET", "/api/terms/brier-score")).body.locked === false, "lesson unlocks after first attempt");
@@ -28,14 +34,20 @@ ok(a.outcome === "correct" && a.independent, "Brier mean 0.065 scored correct an
 
 const g = (await call("POST", "/api/glue", { text: "Gloo it, cholecystokinen", mode: "typed" })).body;
 ok(g.term_id === "cholecystokinin" && g.resolution.method === "spelling", "Gloo it resolves a typo to the reviewed lesson without AI");
+const v = (await call("POST", "/api/glue", { text: "glue it, brier score", mode: "voice" })).body;
+ok(v.term_id === "brier-score" && v.resolution.mode === "voice", "a spoken 'gloo it, brier score' opens the Brier lesson");
 
-const describe = (await call("POST", "/api/cues/resolve", { entity: "Breyers", type: "brand" })).body;
-console.log(`qloo describe(Breyers) -> ${describe.envelope.status}:`, describe.envelope.error ? `${describe.envelope.error.code}: ${describe.envelope.summary}` : describe.items.slice(0, 3).map((i) => `${i.name} [${i.id}]`));
-ok(describe.envelope.status !== "error", "Qloo describe reachable");
+if (process.env.SMOKE_QLOO === "1") {
+  const describe = (await call("POST", "/api/cues/resolve", { entity: "Breyers", type: "brand" })).body;
+  console.log(`qloo describe(Breyers) -> ${describe.envelope?.status ?? describe.error}:`, describe.envelope?.error ? `${describe.envelope.error.code}: ${describe.envelope.summary}` : (describe.items ?? []).slice(0, 3).map((i) => `${i.name} [${i.id}]`));
+  ok(describe.envelope && describe.envelope.status !== "error", "Qloo describe reachable");
 
-const agent = (await call("POST", "/api/cues/agent", { term_id: "brier-score", familiar: ["Breyers", "Moneyball"] })).body;
-console.log(`agent -> ${agent.status}${agent.model ? ` (${agent.model})` : ""}`);
-for (const s of agent.trace ?? []) console.log(`   ${s.tool} ${JSON.stringify(s.args)} -> ${s.status} · ${s.result_count}`);
-for (const c of agent.cues ?? []) console.log(`   cue [${c.role}] ${c.label} · ${c.source}: ${c.connection}`);
-ok(["ok", "unavailable"].includes(agent.status), "agent returned a usable state");
+  const agent = (await call("POST", "/api/cues/agent", { term_id: "brier-score", familiar: ["Breyers", "Moneyball"] })).body;
+  console.log(`agent -> ${agent.status ?? agent.error}${agent.model ? ` (${agent.model})` : ""}`);
+  for (const s of agent.trace ?? []) console.log(`   ${s.tool} ${JSON.stringify(s.args)} -> ${s.status} · ${s.result_count}`);
+  for (const c of agent.cues ?? []) console.log(`   cue [${c.role}] ${c.label} · ${c.source}: ${c.connection}`);
+  ok(["ok", "unavailable"].includes(agent.status), "agent returned a usable state");
+} else {
+  console.log("skipped: Qloo describe and agent (set SMOKE_QLOO=1 to run them; they spend event credit on a cache miss)");
+}
 await call("DELETE", "/api/learner");
