@@ -5,7 +5,7 @@ Built for the Qloo Agentic Hackathon as an open extension of [Gloo](https://gloo
 
 > Patent pending. See [PATENTS.md](PATENTS.md).
 
-**Live demo:** _[URL after deploy]_
+**Live demo:** https://qloo-gloo-667990366434.us-central1.run.app
 
 ## What it does
 
@@ -89,7 +89,7 @@ echo 'export QLOO_TRUSTED_BASE_URL=https://hackathon.api.qloo.com' >> ~/.bashrc
 source ~/.bashrc
 qloo setup --qloo && qloo setup --status      # expect "Qloo data: ready"
 
-git clone <this repo> qloo-gloo && cd qloo-gloo
+git clone https://github.com/FludAI/qloo-gloo.git && cd qloo-gloo
 cp .env.example .env                           # add ANTHROPIC_API_KEY for the agent
 npm install
 npm run dev                                    # http://localhost:5173

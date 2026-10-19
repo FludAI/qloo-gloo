@@ -2,14 +2,18 @@
 // Usage: npm run smoke            (http://localhost:8787)
 //        SMOKE_URL=https://your-demo.run.app npm run smoke
 const BASE = process.env.SMOKE_URL ?? "http://localhost:8787";
-let cookie = "";
+// Cookie jar keyed by name: hosts like Cloud Run add their own cookies (e.g. session affinity) alongside gloo_sid.
+const jar = new Map();
 async function call(method, path, body) {
+  const cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
   const res = await fetch(BASE + path, {
     method, headers: { ...(cookie && { cookie }), ...(body && { "content-type": "application/json" }) },
     body: body && JSON.stringify(body),
   });
-  const set = res.headers.get("set-cookie");
-  if (set) cookie = set.split(";")[0];
+  for (const set of res.headers.getSetCookie?.() ?? [res.headers.get("set-cookie")].filter(Boolean)) {
+    const [k, v] = set.split(";")[0].split("=");
+    if (k) jar.set(k.trim(), v ?? "");
+  }
   return { status: res.status, body: await res.json() };
 }
 const ok = (cond, label) => { console.log(`${cond ? "PASS" : "FAIL"}  ${label}`); if (!cond) process.exitCode = 1; };

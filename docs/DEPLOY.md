@@ -8,7 +8,7 @@ containers, so this works. Serverless *functions* would not.
 
 ```bash
 PROJECT=your-gcp-project
-REGION=us-west1
+REGION=us-central1
 gcloud config set project $PROJECT
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com
 

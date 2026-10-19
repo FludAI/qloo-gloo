@@ -4,8 +4,8 @@ Required: live demo URL · public repo URL · text description · external hosti
 · open-source license visible in the repo's About panel.
 
 ## Links
-- Demo: _[Cloud Run URL]_
-- Repo: _[GitHub URL]_
+- Demo: https://qloo-gloo-667990366434.us-central1.run.app
+- Repo: https://github.com/FludAI/qloo-gloo (private until the patent checklist clears; flip to public before submitting)
 
 ## Description (draft)
 
