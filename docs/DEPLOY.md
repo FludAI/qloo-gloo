@@ -64,6 +64,7 @@ Environment variables (defaults shown):
 | `LIMIT_AGENT_PER_SESSION_HOUR` | `8` | Agent runs per browser session per hour |
 | `LIMIT_AGENT_GLOBAL_DAY` | `300` | Agent runs per day across all visitors |
 | `LIMIT_QLOO_PER_SESSION_HOUR` | `60` | Qloo calls per session per hour (cache hits are free) |
+| `LIMIT_QLOO_GLOBAL_DAY` | `150` | Qloo calls per day across all visitors (cache hits are free; cached answers persist in SQLite for `QLOO_CACHE_TTL_HOURS`, default 168) |
 | `LIMIT_STT_PER_SESSION_HOUR` | `40` | Transcriptions per session per hour |
 | `LIMIT_CAMERA_PER_SESSION_HOUR` | `40` | Camera reads per session per hour |
 | `DEMO_PASSCODE` | unset | When set, camera, voice, the agent and drafting need it once per session |

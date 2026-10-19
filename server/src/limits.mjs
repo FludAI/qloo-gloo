@@ -4,13 +4,21 @@ const LIMITS = {
   qloo: Number(process.env.LIMIT_QLOO_PER_SESSION_HOUR ?? 60),
   agent: Number(process.env.LIMIT_AGENT_PER_SESSION_HOUR ?? 8),
   agent_global: Number(process.env.LIMIT_AGENT_GLOBAL_DAY ?? 300),
+  qloo_global: Number(process.env.LIMIT_QLOO_GLOBAL_DAY ?? 150),
   stt: Number(process.env.LIMIT_STT_PER_SESSION_HOUR ?? 40),
   camera: Number(process.env.LIMIT_CAMERA_PER_SESSION_HOUR ?? 40),
 };
 const buckets = new Map();
 let globalAgent = { day: new Date().toDateString(), n: 0 };
+let globalQloo = { day: new Date().toDateString(), n: 0 };
 
 export function take(kind, sid) {
+  if (kind === "qloo") {
+    // Event credits are finite: a hard daily cap across all visitors (cache hits never reach here).
+    const today = new Date().toDateString();
+    if (globalQloo.day !== today) globalQloo = { day: today, n: 0 };
+    if (globalQloo.n >= LIMITS.qloo_global) return { ok: false, reason: "The demo's daily Qloo budget is used up. Reviewed hooks and practice still work." };
+  }
   if (kind === "agent") {
     const today = new Date().toDateString();
     if (globalAgent.day !== today) globalAgent = { day: today, n: 0 };
@@ -23,5 +31,6 @@ export function take(kind, sid) {
   hits.push(now);
   buckets.set(key, hits);
   if (kind === "agent") globalAgent.n++;
+  if (kind === "qloo") globalQloo.n++;
   return { ok: true };
 }

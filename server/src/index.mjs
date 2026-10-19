@@ -165,7 +165,7 @@ app.post("/api/transcribe", gate, wrap(async (req, res) => {
 }));
 
 // ---- Qloo cue discovery ----
-app.post("/api/cues/resolve", wrap(async (req, res) => {
+app.post("/api/cues/resolve", gate, wrap(async (req, res) => {
   const entity = String(req.body?.entity ?? "").trim().slice(0, 80);
   if (!entity) return res.status(400).json({ error: "entity is required" });
   const args = { entity, ...(req.body?.type ? { type: String(req.body.type) } : {}) };
@@ -419,7 +419,7 @@ app.get("/api/export", (req, res) => res.json(exportLearner(req.sid)));
 app.delete("/api/learner", (req, res) => { deleteLearner(req.sid); res.json({ deleted: true }); });
 
 // Allow-listed passthrough to any Qloo workflow (schemas validated by qloo mcp).
-app.post("/api/qloo/:op", wrap(async (req, res) => {
+app.post("/api/qloo/:op", gate, wrap(async (req, res) => {
   if (!OPERATIONS.includes(req.params.op)) return res.status(404).json({ error: "unknown operation" });
   const envelope = await runQloo(req.sid, req.params.op, req.body ?? {});
   res.json({ request: { operation: req.params.op, args: req.body ?? {} }, envelope, items: toItems(envelope) });
