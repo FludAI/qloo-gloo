@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
-import Camera, { fileToJpeg } from "./components/Camera.jsx";
-import LessonSheet from "./components/LessonSheet.jsx";
+import Camera from "./components/Camera.jsx";
+import Flow from "./components/Flow.jsx";
 import Passcode from "./components/Passcode.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
-import { CameraIcon, CloseIcon, InfoIcon, KeyboardIcon, LockIcon, MicIcon } from "./components/Icons.jsx";
+import { CameraIcon, CloseIcon, InfoIcon, LockIcon, MicIcon } from "./components/Icons.jsx";
 
-// Camera first. Frame a word, tap Gloo it, or hold the mic and say it. The lesson rises as a sheet.
+// Gloo is a camera. Camera and mic on (phone or glasses), or you don't proceed. No typing anywhere.
+// Frame a word and tap, or hold the mic and say it. The lesson rises as cards over the viewfinder.
 export default function App() {
   const cam = useRef(null);
   const [health, setHealth] = useState(null);
@@ -16,7 +17,6 @@ export default function App() {
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState("");
   const [sheet, setSheet] = useState(null); // { termId, glued }
-  const [typing, setTyping] = useState(false);
   const [info, setInfo] = useState(false);
   const [pass, setPass] = useState(null); // { retry }
   const toastTimer = useRef(null);
@@ -24,7 +24,12 @@ export default function App() {
   const say = useCallback((msg) => { setToast(msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(""), 3500); }, []);
   const loadHealth = useCallback(() => api.health().then(setHealth).catch(() => setHealth({ offline: true })), []);
   const loadTerms = useCallback(() => api.terms().then(setTerms).catch(() => {}), []);
-  useEffect(() => { loadHealth(); loadTerms(); }, [loadHealth, loadTerms]);
+  useEffect(() => {
+    // A shared link can carry the passcode (?code=...), so nobody has to type it.
+    const code = new URLSearchParams(location.search).get("code");
+    const boot = code ? api.unlock(code).catch(() => {}).then(() => history.replaceState(null, "", location.pathname)) : Promise.resolve();
+    boot.then(() => { loadHealth(); loadTerms(); });
+  }, [loadHealth, loadTerms]);
 
   // Every metered action goes through here: a passcode challenge replays the action once unlocked.
   const guard = useCallback(async (fn) => {
@@ -35,11 +40,7 @@ export default function App() {
     }
   }, [say]);
 
-  const onGlued = async (result) => {
-    await loadTerms();
-    setSheet({ termId: result.term_id, glued: result });
-    setTyping(false);
-  };
+  const onGlued = async (result) => { await loadTerms(); setSheet({ termId: result.term_id, glued: result }); };
   const glue = (body, label) => guard(async () => {
     setBusy(label);
     try { await onGlued(await api.glue(body)); } finally { setBusy(""); }
@@ -58,15 +59,12 @@ export default function App() {
 
   const openCamera = () => cam.current?.start();
   const onCamState = (s, extra) => { setCamState(s); if (s === "live") setMicGranted(Boolean(extra?.mic)); };
-  const photo = (file) => file && guard(async () => { setBusy("Reading…"); try { await onGlued(await api.glue({ mode: "camera", ...(await fileToJpeg(file)) })); } finally { setBusy(""); } });
-
   const live = camState === "live";
   const locked = health?.gated && !health?.unlocked;
 
   return (
     <div className="relative h-full w-full select-none overflow-hidden bg-black text-paper">
       <Camera ref={cam} onState={onCamState}>
-        {/* Top bar */}
         <div className="safe-top absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4">
           <span className="font-display text-2xl tracking-tight">gloo</span>
           <div className="flex items-center gap-2">
@@ -75,33 +73,27 @@ export default function App() {
           </div>
         </div>
 
-        {/* Idle: one tap opens the camera, and asks for the mic in the same prompt. */}
+        {/* The gate. Camera and mic are the interface; there is no page behind it. */}
         {(camState === "idle" || camState === "starting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-            <h1 className="font-display text-5xl leading-[1.02]">Point at a hard word.<br /><em className="text-gloo">Gloo it.</em></h1>
-            <p className="mt-4 max-w-xs text-sm text-paper/70">Frame the word, or just say it. You get the meaning already hidden inside it, hooked to things you already know.</p>
-            <button className="btn-light mt-8" disabled={camState === "starting"} onClick={openCamera}><CameraIcon /> {camState === "starting" ? "Opening…" : "Open camera"}</button>
-            <button className="mt-4 text-sm text-paper/70 underline" onClick={() => setTyping(true)}>or type a word</button>
+            <h1 className="font-display text-5xl leading-[1.02]">Gloo works<br />through your <em className="text-gloo">camera.</em></h1>
+            <p className="mt-5 max-w-xs text-sm text-paper/70">Turn on your phone's camera and microphone, or wear your smart glasses, to continue. Point at a hard word and say “gloo it”.</p>
+            <button className="btn-light mt-8" disabled={camState === "starting"} onClick={openCamera}><CameraIcon /> {camState === "starting" ? "Opening…" : "Turn on camera and mic"}</button>
           </div>
         )}
 
-        {/* Camera refused or missing: photo and typing still work. */}
         {(camState === "denied" || camState === "unavailable") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-            <h1 className="font-display text-4xl leading-tight">{camState === "denied" ? "Camera is blocked." : "No camera here."}</h1>
-            <p className="mt-3 max-w-xs text-sm text-paper/70">{camState === "denied" ? "Allow the camera in your browser's site settings, or use a photo." : "Use a photo or type the word."}</p>
-            <label className="btn-light mt-6 cursor-pointer"><CameraIcon /> Take a photo
-              <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { photo(e.target.files?.[0]); e.target.value = ""; }} /></label>
-            <button className="mt-3 text-sm text-paper/70 underline" onClick={() => setTyping(true)}>type a word</button>
-            {camState === "denied" && <button className="mt-6 text-xs text-paper/50 underline" onClick={openCamera}>try the camera again</button>}
+            <h1 className="font-display text-4xl leading-tight">{camState === "denied" ? "Gloo needs the camera." : "No camera found."}</h1>
+            <p className="mt-3 max-w-xs text-sm text-paper/70">{camState === "denied" ? "Allow the camera and microphone for this site in your browser settings, then try again." : "Open this on a phone, or on glasses with a camera."}</p>
+            <button className="btn-light mt-6" onClick={openCamera}><CameraIcon /> Try again</button>
           </div>
         )}
 
         {live && (<>
           <p className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-paper/80" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 2.2rem)" }}>
-            {busy || (talk.listening ? "Listening… release when done" : "Frame the word, then tap. Or hold the mic and say it.")}
+            {busy || (talk.listening ? "Listening… release when done" : "Frame the word and tap, or hold the mic and say it.")}
           </p>
-          {/* Your words */}
           {terms.length > 0 && (
             <div className="absolute inset-x-0 z-10 flex gap-2 overflow-x-auto px-4 pb-1" style={{ bottom: "calc(8.5rem + env(safe-area-inset-bottom))", scrollbarWidth: "none" }}>
               {terms.map((t) => (
@@ -111,9 +103,8 @@ export default function App() {
               ))}
             </div>
           )}
-          {/* Controls */}
-          <div className="safe-bottom absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-7 px-6">
-            <button className="round" aria-label="Type a word" onClick={() => setTyping(true)}><KeyboardIcon /></button>
+          <div className="safe-bottom absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-8 px-6">
+            <span className="h-14 w-14" />
             <button className="shutter" aria-label="Gloo it: read the framed word" disabled={!!busy || talk.listening} onClick={glueFrame}>
               <span className="font-display text-xl">Gloo it</span>
             </button>
@@ -123,35 +114,14 @@ export default function App() {
           </div>
         </>)}
 
-        {toast && <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6" style={{ bottom: "calc(12rem + env(safe-area-inset-bottom))" }}><span className="toast">{toast}</span></div>}
-        {talk.error && !toast && <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6" style={{ bottom: "calc(12rem + env(safe-area-inset-bottom))" }}><span className="toast">{talk.error}</span></div>}
+        {(toast || (talk.error && !busy)) && <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6" style={{ bottom: "calc(12rem + env(safe-area-inset-bottom))" }}><span className="toast">{toast || talk.error}</span></div>}
         {busy && <div className="pointer-events-none absolute inset-0 z-10 bg-black/20" />}
       </Camera>
 
-      {typing && <TypeSheet busy={busy} onClose={() => setTyping(false)} onSubmit={(text) => glue({ text, mode: "typed" }, "Gluing…")} />}
-      {sheet && <LessonSheet termId={sheet.termId} glued={sheet.glued} health={health} guard={guard}
+      {sheet && <Flow termId={sheet.termId} glued={sheet.glued} health={health} guard={guard}
         onClose={() => { setSheet(null); loadTerms(); }} onRegue={(body) => glue(body, "Gluing…")} />}
-      {info && <InfoSheet health={health} terms={terms} micGranted={micGranted} onClose={() => setInfo(false)} onPasscode={() => { setInfo(false); setPass({ retry: null }); }} />}
+      {info && <InfoSheet health={health} micGranted={micGranted} onClose={() => setInfo(false)} onPasscode={() => { setInfo(false); setPass({ retry: null }); }} />}
       {pass && <Passcode onClose={() => setPass(null)} onUnlocked={async () => { const retry = pass.retry; setPass(null); await loadHealth(); if (retry) guard(retry); }} />}
-    </div>
-  );
-}
-
-function TypeSheet({ busy, onClose, onSubmit }) {
-  const [text, setText] = useState("");
-  const go = () => text.trim() && onSubmit(text.trim());
-  return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet max-h-[50vh]" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-handle" />
-        <div className="flex items-center justify-between"><h2 className="font-display text-3xl">Type it</h2><button aria-label="Close" className="round !h-10 !w-10 !bg-line/60 !text-ink" onClick={onClose}><CloseIcon /></button></div>
-        <p className="mt-1 text-sm text-muted">Spelling doesn't have to be right.</p>
-        <div className="mt-3 flex gap-2">
-          <input autoFocus aria-label="Word to gloo" className="field" placeholder="e.g. cholecystokinin" autoCapitalize="none" value={text}
-            onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} />
-          <button className="btn shrink-0" disabled={!text.trim() || !!busy} onClick={go}>{busy ? "…" : "Gloo it"}</button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -164,26 +134,26 @@ function InfoSheet({ health, micGranted, onClose, onPasscode }) {
     a.click(); URL.revokeObjectURL(a.href);
   };
   const wipe = async () => { await api.deleteData(); setMsg("Deleted. Reloading…"); setTimeout(() => location.reload(), 800); };
-  const row = (label, ok, note) => <li className="flex items-center justify-between"><span>{label}</span><span className={`rounded-full px-2 py-0.5 text-[11px] ${ok ? "bg-sea text-paper" : "bg-gloo-soft text-gloo-deep"}`}>{note}</span></li>;
+  const row = (label, ok, note) => <li className="flex items-center justify-between"><span>{label}</span><span className={`rounded-full px-2 py-0.5 text-[11px] ${ok ? "bg-sea text-paper" : "bg-gloo/30 text-paper"}`}>{note}</span></li>;
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet max-h-[75vh]" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-handle" />
-        <div className="flex items-center justify-between"><h2 className="font-display text-3xl">Gloo × Qloo</h2><button aria-label="Close" className="round !h-10 !w-10 !bg-line/60 !text-ink" onClick={onClose}><CloseIcon /></button></div>
-        <p className="mt-2 text-sm">Gloo pulls the meaning already inside a hard word, then an agent uses Qloo's taste graph to hook each part to things people like you already know. You confirm every hook. Practice hides them.</p>
+        <div className="flex items-center justify-between"><h2 className="font-display text-3xl">Gloo × Qloo</h2><button aria-label="Close" className="round !h-10 !w-10" onClick={onClose}><CloseIcon /></button></div>
+        <p className="mt-2 text-sm text-paper/80">Gloo pulls the meaning already inside a hard word and hooks each part to things you already like. Your picks are the hooks. Practice hides them.</p>
         {health && !health.offline && (
           <ul className="mt-4 space-y-1.5 text-sm">
-            {row("Qloo", health.qloo.ready, health.qloo.mode === "mock" ? "mock data" : health.qloo.ready ? "live" : "key missing")}
-            {row("Cue agent", health.agent.mode === "live", health.agent.mode === "live" ? health.agent.model : health.agent.mode)}
             {row("Camera reading", health.camera === "live", health.camera)}
             {row("Speech", health.stt === "google", health.stt === "google" ? "server" : health.stt === "mock" ? "mock" : "browser only")}
             {row("Microphone", micGranted, micGranted ? "allowed" : "ask when held")}
+            {row("Cue agent", health.agent.mode === "live", health.agent.mode === "live" ? health.agent.model : health.agent.mode)}
+            {row("Qloo", health.qloo.ready, health.qloo.mode === "mock" ? "mock data" : health.qloo.ready ? "live" : "key missing")}
             {health.gated && row("Passcode", health.unlocked, health.unlocked ? "unlocked" : "locked")}
           </ul>
         )}
-        {health?.gated && !health?.unlocked && <button className="btn mt-3" onClick={onPasscode}>Enter passcode</button>}
-        <p className="mt-4 text-xs text-muted">Only the framed crop and a few seconds of audio go to the server; nothing is stored. Qloo results describe what groups tend to like, not what one person knows. Not in this build: pronunciation scoring, glasses, rewards.</p>
-        <p className="mt-3 flex gap-3 text-xs text-muted">
+        {health?.gated && !health?.unlocked && <button className="btn-light mt-3" onClick={onPasscode}>Enter passcode</button>}
+        <p className="mt-4 text-xs text-paper/50">Only the framed crop and a few seconds of audio go to the server; nothing is stored. Not in this build: pronunciation scoring, glasses input, rewards.</p>
+        <p className="mt-3 flex gap-3 text-xs text-paper/60">
           <button className="underline" onClick={download}>Export my data</button>
           <button className="underline" onClick={wipe}>Delete my data</button>
           {msg && <span>{msg}</span>}

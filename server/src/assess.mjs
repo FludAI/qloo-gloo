@@ -25,8 +25,26 @@ export function brierMulticlass(probs, trueIndex) {
 
 export const NUMERIC_TOLERANCE = 5e-4; // documented: answers within ±0.0005 count
 
+const DIGIT_WORDS = { zero: "0", oh: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
+// "zero point zero six five" -> "0.065"; "point four" -> ".4"; "eighty percent" is left to the caller's rules.
+export function normalizeSpokenNumber(raw) {
+  const s = String(raw ?? "").toLowerCase().trim();
+  if (/^[-+]?[\d.,]+%?$/.test(s)) return s;
+  const tokens = s.replace(/[^a-z0-9.%\s-]/g, " ").split(/\s+/).filter(Boolean);
+  if (!tokens.length || !tokens.every((t) => t in DIGIT_WORDS || ["point", "dot", "minus", "negative", "percent", "%", "-"].includes(t) || /^[\d.]+$/.test(t))) return s;
+  let out = "";
+  for (const t of tokens) {
+    if (t in DIGIT_WORDS) out += DIGIT_WORDS[t];
+    else if (t === "point" || t === "dot") out += ".";
+    else if (t === "minus" || t === "negative" || t === "-") out = "-" + out;
+    else if (t === "percent" || t === "%") out += "%";
+    else out += t;
+  }
+  return out;
+}
+
 export function parseNumber(raw) {
-  const s = String(raw ?? "").trim().replace(/,/g, "");
+  const s = normalizeSpokenNumber(raw).trim().replace(/,/g, "");
   if (!s) return null;
   const pct = s.endsWith("%");
   const n = Number(pct ? s.slice(0, -1) : s);

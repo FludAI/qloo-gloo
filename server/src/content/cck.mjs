@@ -39,10 +39,34 @@ export const cck = {
     { label: "NCBI: cytokinesis", url: "https://www.ncbi.nlm.nih.gov/books/NBK26831/" },
   ],
   roles: [
-    { id: "chole", label: "chole = bile", target: "the sound “koh-lih” / chole", look_for: "something that sounds like “cola / chole”" },
-    { id: "cysto", label: "cysto = bladder or sac", target: "the sound “sis” / cysto", look_for: "something that sounds like “sister / sis”" },
-    { id: "kin", label: "kin = movement", target: "movement", look_for: "something you picture moving" },
-    { id: "in", label: "-in ending", target: "the ending sound “-in”", look_for: "something ending in “-in”" },
+    { id: "chole", label: "chole = bile", target: "the sound “koh-lih” / chole", look_for: "something that sounds like “cola / chole”",
+      pick: { question: "Which cola is yours?", options: [
+        { name: "Coca-Cola", qloo: { entity: "Coca-Cola", type: "brand" }, connection: "Coca-Cola ≈ chole (approximate sound). Chole means bile." },
+        { name: "Pepsi-Cola", qloo: { entity: "Pepsi", type: "brand" }, connection: "Pepsi-Cola ≈ chole (approximate sound). Chole means bile." },
+        { name: "RC Cola", qloo: { entity: "RC Cola", type: "brand" }, connection: "RC Cola ≈ chole (approximate sound). Chole means bile." },
+        { name: "Inca Kola", qloo: { entity: "Inca Kola", type: "brand" }, connection: "Inca Kola ≈ chole (approximate sound). Chole means bile." },
+      ] } },
+    { id: "cysto", label: "cysto = bladder or sac", target: "the sound “sis” / cysto", look_for: "something that sounds like “sister / sis”",
+      pick: { question: "Which “Sister” do you know best?", options: [
+        { name: "Sister Act", qloo: { entity: "Sister Act", type: "movie" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
+        { name: "Twisted Sister", qloo: { entity: "Twisted Sister", type: "artist" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
+        { name: "Sister Sledge", qloo: { entity: "Sister Sledge", type: "artist" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
+        { name: "Sisters (2015)", qloo: { entity: "Sisters", type: "movie" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
+      ] } },
+    { id: "kin", label: "kin = movement", target: "movement", look_for: "something you picture moving",
+      pick: { question: "Which one do you picture moving?", options: [
+        { name: "Formula 1", qloo: { entity: "Formula 1", type: "brand" }, connection: "Formula 1 is movement. Kin / kine means movement." },
+        { name: "Fast & Furious", qloo: { entity: "Fast & Furious", type: "movie" }, connection: "Fast & Furious is movement. Kin / kine means movement." },
+        { name: "Tour de France", qloo: { entity: "Tour de France", type: "brand" }, connection: "The Tour de France is movement. Kin / kine means movement." },
+        { name: "Tesla", qloo: { entity: "Tesla", type: "brand" }, connection: "A Tesla is movement. Kin / kine means movement." },
+      ] } },
+    { id: "in", label: "-in ending", target: "the ending sound “-in”", look_for: "something ending in “-in”",
+      pick: { question: "Which one ends in “-in”?", options: [
+        { name: "LinkedIn", qloo: { entity: "LinkedIn", type: "brand" }, connection: "Linked-in supplies the ending sound -in of cholecystokin-in. Ending sound only, not the definition." },
+        { name: "Aladdin", qloo: { entity: "Aladdin", type: "movie" }, connection: "Aladd-in supplies the ending sound -in of cholecystokin-in. Ending sound only, not the definition." },
+        { name: "Tintin", qloo: { entity: "The Adventures of Tintin", type: "book" }, connection: "Tint-in supplies the ending sound -in of cholecystokin-in. Ending sound only, not the definition." },
+        { name: "Penguin", qloo: { entity: "Penguin Books", type: "brand" }, connection: "Pengu-in supplies the ending sound -in of cholecystokin-in. Ending sound only, not the definition." },
+      ] } },
   ],
   editorial_cues: [
     { id: "cola", role: "chole", name: "Cola", qloo: { entity: "Coca-Cola", type: "brand" },

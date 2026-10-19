@@ -46,7 +46,13 @@ const LESSON_TOOL = {
     roles: { type: "array", minItems: 2, maxItems: 4, description: "Parts of the term a familiar cue could carry",
       items: { type: "object", properties: {
         id: { type: "string", description: "short slug" }, label: { type: "string" },
-        target: { type: "string" }, look_for: { type: "string" } }, required: ["id", "label", "target", "look_for"] } },
+        target: { type: "string" }, look_for: { type: "string" },
+        pick: { type: "object", description: "A favorite-pick: 3-4 well-known public names (brands, films, bands, books, teams) that ALL carry this part's sound or meaning, so any choice works as the cue",
+          properties: { question: { type: "string", description: "e.g. Which cola is yours?" },
+            options: { type: "array", minItems: 3, maxItems: 4, items: { type: "object", properties: {
+              name: { type: "string" }, connection: { type: "string", description: "One sentence: how this name carries the part. Say 'approximate' for sound links." } },
+              required: ["name", "connection"] } } }, required: ["question", "options"] } },
+        required: ["id", "label", "target", "look_for", "pick"] } },
     distinctions: { type: "array", maxItems: 4, items: { type: "string" }, description: "Easy confusions to keep straight" },
     prompts: { type: "array", minItems: 3, maxItems: 5, items: { type: "object", properties: {
       skill: { type: "string", enum: ["meaning", "operation", "transfer"] },
@@ -84,7 +90,10 @@ export function compilePacket(json) {
 
 function shape(id, input, d, origin) {
   const components = (d.components ?? []).slice(0, 5).map((c) => ({ part: clip(c.part, 30), meaning: clip(c.meaning, 80), cue: c.cue ? clip(c.cue, 120) : "—" }));
-  const roles = (d.roles ?? []).slice(0, 4).map((r) => ({ id: slug(r.id), label: clip(r.label, 50), target: clip(r.target, 80), look_for: clip(r.look_for, 120) }));
+  const roles = (d.roles ?? []).slice(0, 4).map((r) => ({
+    id: slug(r.id), label: clip(r.label, 50), target: clip(r.target, 80), look_for: clip(r.look_for, 120),
+    pick: r.pick?.options?.length ? { question: clip(r.pick.question, 80), options: r.pick.options.slice(0, 4).map((o) => ({ name: clip(o.name, 40), qloo: null, connection: clip(o.connection, 160) })) } : undefined,
+  }));
   const title = clip(d.title, 80) || input;
   const nodes = [["term", title, "term"]];
   const edges = [];
@@ -114,6 +123,7 @@ export async function draftLesson(id, word) {
   const d = await forced(
     `You draft provisional lessons for Gloo, which teaches hard terms by first using the meaning already inside them (roots, parts, origin), then linking parts to familiar cues.
 Be accurate. If the term has meaningful parts, list them. Sound cues are approximate memory aids, never etymology.
+Each role needs a favorite-pick: a question like "Which cola is yours?" and 3-4 well-known public names that all carry that part's sound or meaning, so whichever one the learner picks works as the cue.
 Practice prompts: short, answerable, deterministic. Text prompts need keyword rubrics (lowercase stems that a correct answer must contain). Number prompts need an exact expected value.
 Only cite sources you are confident exist (major dictionaries, NIH/NCBI, Wikipedia). It is fine to cite none.`,
     `Draft a provisional lesson for the term: "${word}"`,
@@ -128,8 +138,10 @@ export function syntheticLesson(id, word) {
     title, pronunciation_approx: "—",
     summary: "SYNTHETIC placeholder. Set ANTHROPIC_API_KEY to have the agent draft a real provisional lesson.",
     definition: "Not drafted (mock mode).",
-    roles: [{ id: "sound", label: "Sound of the word", target: title, look_for: "something that sounds like it" },
-      { id: "meaning", label: "Core meaning", target: "its meaning", look_for: "something that carries its meaning" }],
+    roles: [{ id: "sound", label: "Sound of the word", target: title, look_for: "something that sounds like it",
+        pick: { question: "Which one sounds closest?", options: [{ name: "Option A", connection: "SYNTHETIC option." }, { name: "Option B", connection: "SYNTHETIC option." }, { name: "Option C", connection: "SYNTHETIC option." }] } },
+      { id: "meaning", label: "Core meaning", target: "its meaning", look_for: "something that carries its meaning",
+        pick: { question: "Which one carries the meaning?", options: [{ name: "Option A", connection: "SYNTHETIC option." }, { name: "Option B", connection: "SYNTHETIC option." }, { name: "Option C", connection: "SYNTHETIC option." }] } }],
     prompts: [{ skill: "meaning", type: "text", question: `Spell the word you glued.`, accept_any: [word.toLowerCase()], answer: word }],
   }, "synthetic");
 }

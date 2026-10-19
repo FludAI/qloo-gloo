@@ -103,6 +103,19 @@ test("7: a cue needs explicit recognition; it can be edited and removed", async 
   assert.equal((await s("GET", "/api/learner/cues/brier-score")).body.length, 0);
 });
 
+test("a favorite pick is saved as the learner's cue for that role", async () => {
+  const s = session();
+  await s("POST", "/api/terms/cholecystokinin/first-attempt", { skipped: true });
+  const term = (await s("GET", "/api/terms/cholecystokinin")).body;
+  const role = term.roles.find((r) => r.id === "chole");
+  assert.equal(role.pick.options.length, 4);
+  assert.ok(role.pick.options.every((o) => /cola|kola/i.test(o.name)));
+  const o = role.pick.options[1];
+  const list = (await s("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: "chole", label: o.name, connection: o.connection, source: "pick", recognized: true, qloo_entity_type: o.qloo?.type })).body;
+  assert.equal(list[0].source, "pick");
+  assert.equal(list[0].label, o.name);
+});
+
 test("13 + 24: hints block independence; retried submissions settle once", async () => {
   const s = session();
   await s("POST", "/api/terms/brier-score/first-attempt", { skipped: true });

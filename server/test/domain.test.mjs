@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { brierLoss, brierScore, brierMulticlass, assess, BrierInputError } from "../src/assess.mjs";
+import { brierLoss, brierScore, brierMulticlass, assess, BrierInputError, normalizeSpokenNumber } from "../src/assess.mjs";
 import { deriveSkill, POLICY } from "../src/scheduler.mjs";
 import { findPersonalData } from "../src/guard.mjs";
 import { brier } from "../src/content/brier.mjs";
@@ -33,6 +33,16 @@ test("20: invalid probabilities, unresolved events and empty averages are reject
 test("21: unscaled multiclass is twice binary when K = 2", () => {
   close(brierMulticlass([0.8, 0.2], 0), 2 * brierLoss(0.8, 1));
   close(brierMulticlass([0, 1], 0), 2); // range tops out at 2
+});
+
+test("spoken numbers are scored like typed ones", () => {
+  assert.equal(normalizeSpokenNumber("zero point zero six five"), "0.065");
+  assert.equal(normalizeSpokenNumber("point four"), ".4");
+  assert.equal(normalizeSpokenNumber("0.04"), "0.04");
+  assert.equal(normalizeSpokenNumber("it rained"), "it rained");
+  const p = { type: "number", expected: 0.065, answer: "0.065" };
+  assert.equal(assess(p, "zero point zero six five").outcome, "correct");
+  assert.equal(assess(p, "zero point six five").outcome, "incorrect");
 });
 
 test("numeric assessment uses tolerance, not string equality", () => {

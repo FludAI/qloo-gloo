@@ -6,17 +6,18 @@ html, body, #root { height: 100%; }
 body { background: #000; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 
 @layer components {
-  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40; }
-  .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition active:scale-95 disabled:opacity-40; }
   .btn-light { @apply inline-flex items-center justify-center gap-2 rounded-full bg-paper px-5 py-3 text-base font-medium text-ink shadow-lg transition active:scale-95 disabled:opacity-40; }
-  .field { @apply w-full rounded-xl border border-line bg-white px-3 py-2 text-base text-ink outline-none focus:border-gloo; }
-  .step { @apply font-mono text-[11px] uppercase tracking-[0.18em] text-gloo-deep; }
-  .chip { @apply inline-flex items-center gap-1 rounded-full border border-line bg-white/70 px-2.5 py-1 text-sm text-ink; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-full border border-paper/30 px-4 py-2 text-sm text-paper/80 transition active:scale-95 disabled:opacity-40; }
+  .field { @apply w-full rounded-xl border border-paper/30 bg-paper/10 px-3 py-2 text-base text-paper outline-none placeholder:text-paper/40 focus:border-gloo; }
+  .step { @apply font-mono text-[11px] uppercase tracking-[0.18em] text-gloo; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-paper/20 bg-paper/10 px-2.5 py-1 text-sm text-paper; }
+  .tile { @apply rounded-2xl border border-paper/25 bg-paper/10 px-3 py-4 text-center text-base font-medium text-paper transition active:scale-95 disabled:opacity-40; }
+  .tile-on { @apply border-gloo bg-gloo text-ink; }
 
-  /* Bottom sheet over the camera */
-  .sheet-backdrop { @apply fixed inset-0 z-40 flex items-end justify-center bg-black/30 backdrop-blur-[2px]; }
-  .sheet { @apply w-full max-w-xl overflow-y-auto rounded-t-3xl bg-paper px-5 pt-3 text-ink shadow-2xl; padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); max-height: 88vh; }
-  .sheet-handle { @apply mx-auto mb-3 h-1.5 w-10 rounded-full bg-line; }
+  /* Cards over the camera: dark glass, the viewfinder stays visible behind. */
+  .sheet-backdrop { @apply fixed inset-0 z-40 flex items-end justify-center; }
+  .sheet { @apply w-full max-w-xl overflow-y-auto rounded-t-3xl border-t border-paper/15 bg-black/80 px-5 pt-3 text-paper shadow-2xl backdrop-blur-xl; padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); max-height: 86vh; }
+  .sheet-handle { @apply mx-auto mb-3 h-1.5 w-10 rounded-full bg-paper/30; }
 
   /* Camera chrome */
   .safe-top { padding-top: calc(0.75rem + env(safe-area-inset-top)); }

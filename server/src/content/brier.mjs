@@ -36,10 +36,33 @@ export const brier = {
     { label: "scikit-learn brier_score_loss", url: "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.brier_score_loss.html" },
   ],
   roles: [
-    { id: "sound", label: "Name sound", target: "Brier", look_for: "something that sounds like “Brier”" },
-    { id: "loss_direction", label: "Which way is better", target: "lower loss, toward zero", look_for: "something that means colder / lower / less is better" },
-    { id: "endpoints", label: "Zero and one", target: "probabilities run 0–1; outcomes are 0 or 1", look_for: "something built around 0 and 1" },
-    { id: "outcome", label: "Score the outcome", target: "record what actually happened", look_for: "a resolved event you'd check the result of" },
+    { id: "sound", label: "Name sound", target: "Brier", look_for: "something that sounds like “Brier”",
+      pick: { question: "Which one sounds most like “Brier” to you?", options: [
+        { name: "Breyers", qloo: { entity: "Breyers", type: "brand" }, connection: "Breyers ≈ Brier (approximate sound; Breyers has an extra ending sound)." },
+        { name: "Briar Rose", qloo: { entity: "Sleeping Beauty", type: "movie" }, connection: "Briar ≈ Brier (approximate sound). Sleeping Beauty's other name." },
+        { name: "Brie", qloo: null, connection: "Brie ≈ Bri-er (approximate sound). The cheese, not the score." },
+      ] } },
+    { id: "loss_direction", label: "Which way is better", target: "lower loss, toward zero", look_for: "something that means colder / lower / less is better",
+      pick: { question: "Which cold treat is yours?", options: [
+        { name: "Ice cream", qloo: null, connection: "Ice cream: colder is lower is better. Lower Brier wins." },
+        { name: "Slurpee", qloo: { entity: "7-Eleven", type: "brand" }, connection: "Slurpee: colder is lower is better. Lower Brier wins." },
+        { name: "Frappuccino", qloo: { entity: "Starbucks", type: "brand" }, connection: "Frappuccino: colder is lower is better. Lower Brier wins." },
+        { name: "Snow cone", qloo: null, connection: "Snow cone: colder is lower is better. Lower Brier wins." },
+      ] } },
+    { id: "endpoints", label: "Zero and one", target: "probabilities run 0–1; outcomes are 0 or 1", look_for: "something built around 0 and 1",
+      pick: { question: "Which “one” do you know?", options: [
+        { name: "Zero to One", qloo: { entity: "Zero to One", type: "book" }, connection: "Zero to One: probabilities run 0 to 1, outcomes are 0 or 1. The title only." },
+        { name: "Formula 1", qloo: { entity: "Formula 1", type: "brand" }, connection: "Formula 1: the 1 is the top of the range. Probabilities run 0 to 1, outcomes are 0 or 1." },
+        { name: "Xbox One", qloo: { entity: "Xbox", type: "brand" }, connection: "Xbox One: the 1 is the top of the range. Probabilities run 0 to 1, outcomes are 0 or 1." },
+        { name: "Air Force 1", qloo: { entity: "Nike", type: "brand" }, connection: "Air Force 1: the 1 is the top of the range. Probabilities run 0 to 1, outcomes are 0 or 1." },
+      ] } },
+    { id: "outcome", label: "Score the outcome", target: "record what actually happened", look_for: "a resolved event you'd check the result of",
+      pick: { question: "Whose scores do you check?", options: [
+        { name: "NFL", qloo: { entity: "NFL", type: "brand" }, connection: "An NFL score records what actually happened: 1 if the defined event occurred, 0 if not." },
+        { name: "Premier League", qloo: { entity: "Premier League", type: "brand" }, connection: "A Premier League score records what actually happened: 1 if the defined event occurred, 0 if not." },
+        { name: "NBA", qloo: { entity: "NBA", type: "brand" }, connection: "An NBA score records what actually happened: 1 if the defined event occurred, 0 if not." },
+        { name: "Wimbledon", qloo: { entity: "Wimbledon", type: "brand" }, connection: "A Wimbledon score records what actually happened: 1 if the defined event occurred, 0 if not." },
+      ] } },
   ],
   editorial_cues: [
     { id: "breyers", role: "sound", name: "Breyers", qloo: { entity: "Breyers", type: "brand" },

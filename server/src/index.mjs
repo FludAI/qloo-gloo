@@ -335,7 +335,7 @@ app.post("/api/learner/cues", (req, res) => {
   if (!label || !connection) return res.status(400).json({ error: "label and connection are required" });
   const pii = findPersonalData([label, connection]);
   if (pii) return res.status(400).json({ error: `That looks like a ${pii}.` });
-  const source = ["editorial", "qloo-grounded", "agent (no verified Qloo ID)", "learner", "synthetic"].includes(b.source) ? b.source : "learner";
+  const source = ["editorial", "qloo-grounded", "agent (no verified Qloo ID)", "learner", "synthetic", "pick"].includes(b.source) ? b.source : "learner";
   q.addCue.run(req.sid, t.id, b.role, label, connection, source, b.qloo_entity_id ?? null, b.qloo_entity_type ?? null, 1, Date.now());
   res.json(q.cuesFor.all(req.sid, t.id));
 });
