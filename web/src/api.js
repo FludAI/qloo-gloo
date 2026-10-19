@@ -5,7 +5,13 @@ async function req(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok && !data.envelope && !data.status) throw new Error(data.error ?? data.reason ?? `HTTP ${res.status}`);
+  if (!res.ok && !data.envelope && !data.status) {
+    const err = new Error(data.error ?? data.reason ?? `HTTP ${res.status}`);
+    err.code = data.code ?? null;
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
   return data;
 }
 const get = (p) => req("GET", p);
@@ -13,8 +19,10 @@ const post = (p, b) => req("POST", p, b);
 
 export const api = {
   health: () => get("/api/health"),
+  unlock: (code) => post("/api/unlock", { code }),
   terms: () => get("/api/terms"),
   glue: (body) => post("/api/glue", body),
+  transcribe: (pcm16) => post("/api/transcribe", { pcm16 }),
   term: (id) => get(`/api/terms/${id}`),
   firstAttempt: (id, body) => post(`/api/terms/${id}/first-attempt`, body),
   agent: (term_id, familiar) => post("/api/cues/agent", { term_id, familiar }),

@@ -14,15 +14,15 @@ Gloo first pulls the memory value already inside a term (*chole* = bile,
 already knows. Two complete sample lessons ship here: **cholecystokinin** and its
 word family, and the **Brier score**.
 
-The learner:
+The app opens on the camera. The learner:
 
-0. **Glues a word** from their phone: points the camera at it, says it however
-   it sounds to them, or types it. No spelling confirmation — the server resolves
-   it with dictionary, spelling and sound-alike libraries, and asks Claude only for
-   close calls. Words without a reviewed lesson get a clearly labeled provisional
-   lesson drafted by the agent.
-1. Makes a first attempt. It's saved before the lesson opens. (A spoken capture
-   counts as the first attempt.)
+0. **Gloos a word**: frames it and taps **Gloo it**, or holds the mic and says it
+   (or says "gloo it" over the framed word). Typing is the fallback. The server
+   reads the framed crop, resolves the word with dictionary, spelling and
+   sound-alike libraries, and asks Claude only for close calls. Words without a
+   reviewed lesson get a clearly labeled provisional lesson drafted by the agent.
+1. Makes a first attempt, by saying it or typing it. It's saved before the lesson
+   opens. (A spoken capture counts as the first attempt.)
 2. Reads the lesson: real meanings, sources, and a typed map that keeps
    *memory cues* visibly separate from *actual meanings*.
 3. Names a few public things they know (brands, films, books, shows). **The cue
@@ -65,6 +65,8 @@ Express server (Node 22)
    ├─ scheduler.mjs   per-skill spaced review, injected clock, versioned policy
    ├─ db.mjs          SQLite (node:sqlite), server-issued sessions
    ├─ resolve/        Gloo it word resolution (Levenshtein, Double Metaphone, Hunspell)
+   ├─ reader.mjs      reads the framed camera crop (Claude vision)
+   ├─ speech.mjs      hold-to-talk transcription (Google Speech-to-Text, vocabulary hints)
    ├─ drafter.mjs     LLM backup for close calls; provisional lesson drafts
    ├─ agent.mjs       Claude tool-use loop ──► Qloo tools
    └─ qloo.mjs        one long-lived `qloo mcp` process (@qloo/qloo-harness)
@@ -101,7 +103,14 @@ npm test                                       # 30 domain, resolver and API tes
 window) and `Copy-Item .env.example .env`.
 
 **No keys yet?** `npm run dev:mock` serves labeled fixture data with a
-synthetic agent.
+synthetic agent, a fixture camera read and a fixture transcript.
+
+**Speech locally:** server transcription uses Application Default Credentials
+(`gcloud auth application-default login` with the Speech-to-Text API enabled).
+Without them the browser's own speech recognition is used where it exists.
+
+**Passcode:** set `DEMO_PASSCODE` to gate camera, voice, the agent and drafting
+on a hosted demo. The reviewed lessons stay open.
 
 **Deploy:** [docs/DEPLOY.md](docs/DEPLOY.md) (Google Cloud Run, one container).
 
@@ -114,7 +123,8 @@ synthetic agent.
 | Qloo path through `qloo mcp` | Implemented; reached the hackathon API (401 with a test key). Live results pending key |
 | Cue agent (Claude + Qloo tools, ID verification) | Implemented; loop tested against a fake provider. Live run pending key |
 | Spaced review schedule | Implemented (pilot policy; simulated time is not retention evidence) |
-| Gloo it: camera (on-device OCR), voice (browser speech), typed | Implemented; OCR tested in headless Chromium. Voice needs a real phone browser |
+| Camera-first capture: framed crop read on the server, hold-to-talk voice (Google Speech-to-Text, browser fallback), typed | Implemented; API paths tested. Live camera and mic need a real phone browser |
+| Passcode gate for metered features on the hosted demo | Implemented, tested |
 | Word resolution (exact / spelling / sound-alike / dictionary, LLM backup) | Implemented, tested |
 | Provisional lessons for new words | Implemented; drafting tested against a fake provider. Live drafting pending key |
 | Pronunciation scoring, glasses input, encounter detection, rewards | Not in this build; shown as unavailable |
@@ -126,6 +136,8 @@ Design decisions, including where this build departs from the Gloo spec, are in
 
 - Provisional lessons are AI drafts. They are labeled everywhere and should be
   checked against a trusted source.
+- The camera crop and a few seconds of audio go to the server for reading and
+  transcription. Neither is stored.
 
 - Qloo results describe what groups tend to like, not what one person knows.
 - Sound cues are approximate memory aids, not phonetics or etymology.

@@ -4,6 +4,8 @@ const LIMITS = {
   qloo: Number(process.env.LIMIT_QLOO_PER_SESSION_HOUR ?? 60),
   agent: Number(process.env.LIMIT_AGENT_PER_SESSION_HOUR ?? 8),
   agent_global: Number(process.env.LIMIT_AGENT_GLOBAL_DAY ?? 300),
+  stt: Number(process.env.LIMIT_STT_PER_SESSION_HOUR ?? 40),
+  camera: Number(process.env.LIMIT_CAMERA_PER_SESSION_HOUR ?? 40),
 };
 const buckets = new Map();
 let globalAgent = { day: new Date().toDateString(), n: 0 };

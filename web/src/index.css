@@ -2,10 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body, #root { height: 100%; }
+body { background: #000; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+
 @layer components {
-  .card { @apply rounded-2xl border border-line bg-white/70 p-5 sm:p-6; }
-  .step { @apply font-mono text-xs uppercase tracking-[0.18em] text-gloo-deep; }
-  .btn { @apply inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition hover:bg-gloo-deep disabled:cursor-not-allowed disabled:opacity-40; }
-  .btn-ghost { @apply inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition hover:border-ink hover:text-ink; }
-  .field { @apply w-full rounded-xl border border-line bg-paper px-3 py-2 text-base outline-none focus:border-gloo; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition active:scale-95 disabled:opacity-40; }
+  .btn-light { @apply inline-flex items-center justify-center gap-2 rounded-full bg-paper px-5 py-3 text-base font-medium text-ink shadow-lg transition active:scale-95 disabled:opacity-40; }
+  .field { @apply w-full rounded-xl border border-line bg-white px-3 py-2 text-base text-ink outline-none focus:border-gloo; }
+  .step { @apply font-mono text-[11px] uppercase tracking-[0.18em] text-gloo-deep; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-line bg-white/70 px-2.5 py-1 text-sm text-ink; }
+
+  /* Bottom sheet over the camera */
+  .sheet-backdrop { @apply fixed inset-0 z-40 flex items-end justify-center bg-black/30 backdrop-blur-[2px]; }
+  .sheet { @apply w-full max-w-xl overflow-y-auto rounded-t-3xl bg-paper px-5 pt-3 text-ink shadow-2xl; padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); max-height: 88vh; }
+  .sheet-handle { @apply mx-auto mb-3 h-1.5 w-10 rounded-full bg-line; }
+
+  /* Camera chrome */
+  .safe-top { padding-top: calc(0.75rem + env(safe-area-inset-top)); }
+  .safe-bottom { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+  .shutter { @apply flex h-20 w-20 items-center justify-center rounded-full bg-paper text-ink shadow-2xl transition active:scale-95 disabled:opacity-60; }
+  .round { @apply flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-paper backdrop-blur transition active:scale-95 disabled:opacity-40; }
+  .round-live { @apply bg-gloo text-ink; }
+  .toast { @apply pointer-events-none rounded-full bg-black/70 px-4 py-2 text-sm text-paper backdrop-blur; }
 }
+
+.reticle { position: relative; width: min(78vw, 520px); height: clamp(84px, 16vh, 150px); border-radius: 16px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.28); }
+.reticle .corner { position: absolute; width: 26px; height: 26px; border: 3px solid #f6f1e7; }
+.reticle .tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
+.reticle .tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
+.reticle .bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
+.reticle .br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
+
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(217,130,43,0.6); } 100% { box-shadow: 0 0 0 18px rgba(217,130,43,0); } }
+.listening { animation: pulse-ring 1s ease-out infinite; }

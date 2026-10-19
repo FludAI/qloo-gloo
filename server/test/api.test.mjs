@@ -15,8 +15,13 @@ before(async () => {
   fake = createServer((req, res) => {
     let body = ""; req.on("data", (c) => (body += c));
     req.on("end", () => {
-      const forcedTool = JSON.parse(body || "{}").tool_choice?.name;
+      const parsed = JSON.parse(body || "{}");
+      const offered = (parsed.tools ?? []).map((t) => t.name);
+      const forcedTool = ["resolve_term", "draft_lesson", "read_word"].find((n) => offered.includes(n));
       res.setHeader("content-type", "application/json");
+      if (forcedTool === "read_word") {
+        return res.end(JSON.stringify(reply([{ type: "tool_use", id: "v1", name: "read_word", input: { word: "Cholecystokinin", alternatives: ["gallbladder"], confidence: "high" } }])));
+      }
       if (forcedTool === "resolve_term") {
         return res.end(JSON.stringify(reply([{ type: "tool_use", id: "r1", name: "resolve_term", input: { term: "Breyers", reason: "brand name" } }])));
       }
@@ -173,6 +178,36 @@ test("gloo it: a spoken capture is saved as the first attempt", async () => {
   const t = (await s("GET", "/api/terms/cholecystokinin")).body;
   assert.equal(t.locked, false);
   assert.match(t.first_attempt_record.response, /colla sisto kinin/);
+});
+
+test("gloo it: a camera crop is read and resolved to the reviewed lesson", async () => {
+  const s = session();
+  const { status, body } = await s("POST", "/api/glue", { mode: "camera", image: "x".repeat(200), mime: "image/jpeg" });
+  assert.equal(status, 200);
+  assert.equal(body.term_id, "cholecystokinin");
+  assert.equal(body.resolution.mode, "camera");
+  assert.match(body.resolution.method, /^camera/);
+  assert.equal((await s("GET", "/api/terms/cholecystokinin")).body.locked, true); // a photo is not a first attempt
+});
+
+test("gloo it: the wake phrase alone over a framed word reads the frame; with a word it uses the word", async () => {
+  const s = session();
+  const a = (await s("POST", "/api/glue", { mode: "voice", text: "gloo it", image: "x".repeat(200) })).body;
+  assert.equal(a.term_id, "cholecystokinin");
+  assert.equal(a.resolution.mode, "camera");
+  const b = (await s("POST", "/api/glue", { mode: "voice", text: "Gloo it, brier score", image: "x".repeat(200) })).body;
+  assert.equal(b.term_id, "brier-score");
+  assert.equal(b.resolution.mode, "voice");
+  assert.equal((await s("POST", "/api/glue", { mode: "voice", text: "glue it" })).status, 422);
+});
+
+test("health reports capture capabilities and the gate state", async () => {
+  const s = session();
+  const h = (await s("GET", "/api/health")).body;
+  assert.equal(h.gated, false);
+  assert.equal(h.unlocked, true);
+  assert.equal(h.stt, "mock");
+  assert.equal((await s("POST", "/api/unlock", { code: "anything" })).body.unlocked, true);
 });
 
 test("gloo it: close calls go to the LLM backup", async () => {

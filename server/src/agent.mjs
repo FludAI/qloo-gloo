@@ -111,10 +111,10 @@ export async function runCueAgent({ term, familiar, run }) {
     `Things I already know and like: ${familiar.map((f) => `"${f}"`).join(", ")}.\nFind up to 3 cues that help me learn ${term.title}.` }];
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const last = step === MAX_STEPS - 1;
+    // Current models reject forced tool choice; at the step limit the model is told to finish instead.
+    if (step === MAX_STEPS - 1) messages.push({ role: "user", content: "Step limit reached. Call propose_cues now with the best cues from the Qloo results you already have." });
     const res = await client.messages.create({
-      model: MODEL, max_tokens: 1500, system: systemPrompt(term), tools, messages,
-      tool_choice: last ? { type: "tool", name: "propose_cues" } : { type: "auto" },
+      model: MODEL, max_tokens: 1500, system: systemPrompt(term), tools, messages, tool_choice: { type: "auto" },
     });
     usage.input_tokens += res.usage?.input_tokens ?? 0;
     usage.output_tokens += res.usage?.output_tokens ?? 0;

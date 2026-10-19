@@ -4,13 +4,15 @@ import Anthropic from "@anthropic-ai/sdk";
 import { MODEL } from "./agent.mjs";
 
 const live = () => Boolean(process.env.ANTHROPIC_API_KEY);
+// Current models reject forced tool choice, so the instruction asks for the tool and we check for it.
 const forced = async (system, user, tool) => {
   const client = new Anthropic();
   const res = await client.messages.create({
-    model: MODEL, max_tokens: 2500, system, tools: [tool], tool_choice: { type: "tool", name: tool.name },
+    model: MODEL, max_tokens: 2500, system: `${system}\n\nRespond only by calling the ${tool.name} tool.`,
+    tools: [tool], tool_choice: { type: "auto" },
     messages: [{ role: "user", content: user }],
   });
-  const call = res.content.find((b) => b.type === "tool_use");
+  const call = res.content.find((b) => b.type === "tool_use" && b.name === tool.name);
   if (!call) throw new Error("model returned no structured output");
   return call.input;
 };
@@ -100,7 +102,7 @@ function shape(id, input, d, origin) {
     distinctions: (d.distinctions ?? []).slice(0, 4).map((x) => clip(x, 240)),
     sources: (d.sources ?? []).slice(0, 3).filter((s) => /^https?:\/\//.test(s.url)).map((s) => ({ label: clip(s.label, 100), url: clip(s.url, 300) })),
     roles, editorial_cues: [], graph: { nodes, edges },
-    first_attempt: { question: `How would you say “${title}”? Type your best attempt, or say what you think it means.` },
+    first_attempt: { question: "How would you say it, or what do you think it means? A guess is fine." },
     prompts: (d.prompts ?? []).slice(0, 5).map((p, i) => ({
       id: `${id}-q${i + 1}`, skill: p.skill, type: p.type, question: clip(p.question, 300), hint: p.hint ? clip(p.hint, 200) : undefined,
       accept_all: p.accept_all, accept_any: p.accept_any, expected: p.expected, answer: clip(p.answer, 300), misconceptions: p.misconceptions,

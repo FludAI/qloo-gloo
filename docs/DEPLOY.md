@@ -10,15 +10,16 @@ containers, so this works. Serverless *functions* would not.
 PROJECT=your-gcp-project
 REGION=us-central1
 gcloud config set project $PROJECT
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com speech.googleapis.com
 
 # Secrets: paste each value when prompted (nothing lands in shell history)
 printf "Qloo key: " && read -s K && printf %s "$K" | gcloud secrets create qloo-api-key --data-file=- && unset K; echo
 printf "Anthropic key: " && read -s K && printf %s "$K" | gcloud secrets create anthropic-api-key --data-file=- && unset K; echo
+printf "Demo passcode: " && read -s K && printf %s "$K" | gcloud secrets create gloo-demo-passcode --data-file=- && unset K; echo
 
 # Let Cloud Run's runtime account read them
 SA=$(gcloud projects describe $PROJECT --format='value(projectNumber)')-compute@developer.gserviceaccount.com
-for s in qloo-api-key anthropic-api-key; do
+for s in qloo-api-key anthropic-api-key gloo-demo-passcode; do
   gcloud secrets add-iam-policy-binding $s --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor
 done
 ```
@@ -28,7 +29,7 @@ done
 ```bash
 gcloud run deploy qloo-gloo --source . --region $REGION \
   --allow-unauthenticated \
-  --set-secrets QLOO_API_KEY=qloo-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest \
+  --set-secrets QLOO_API_KEY=qloo-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,DEMO_PASSCODE=gloo-demo-passcode:latest \
   --min-instances 1 --max-instances 1 --session-affinity \
   --memory 1Gi --cpu 1 --timeout 120
 ```
@@ -38,6 +39,10 @@ Then check it:
 ```bash
 SMOKE_URL=$(gcloud run services describe qloo-gloo --region $REGION --format='value(status.url)') npm run smoke
 ```
+
+Spoken capture calls Speech-to-Text with the service's runtime account; no key
+is involved. The account needs the API enabled (above) and a role that includes
+`speech.recognize` (the default compute account's Editor role does).
 
 ## Why one warm instance
 
@@ -59,6 +64,9 @@ Environment variables (defaults shown):
 | `LIMIT_AGENT_PER_SESSION_HOUR` | `8` | Agent runs per browser session per hour |
 | `LIMIT_AGENT_GLOBAL_DAY` | `300` | Agent runs per day across all visitors |
 | `LIMIT_QLOO_PER_SESSION_HOUR` | `60` | Qloo calls per session per hour (cache hits are free) |
+| `LIMIT_STT_PER_SESSION_HOUR` | `40` | Transcriptions per session per hour |
+| `LIMIT_CAMERA_PER_SESSION_HOUR` | `40` | Camera reads per session per hour |
+| `DEMO_PASSCODE` | unset | When set, camera, voice, the agent and drafting need it once per session |
 
 Set a budget alert on the Anthropic account too. Qloo hackathon keys expire
 after the event; after that the demo shows "Qloo: key missing" and keeps the

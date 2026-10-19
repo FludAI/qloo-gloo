@@ -1,5 +1,5 @@
 import express from "express";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -14,13 +14,18 @@ import { assess } from "./assess.mjs";
 import { deriveSkill, POLICY } from "./scheduler.mjs";
 import { listTerms, getTerm, findPrompt, publicTerm, publicPrompt, addTerms } from "./content/index.mjs";
 import { runCueAgent, runSyntheticAgent, agentMode, MODEL } from "./agent.mjs";
-import { setVocabulary, resolveLocal, pickFromOcr } from "./resolve/index.mjs";
+import { setVocabulary, resolveLocal, pickFromOcr, normalize } from "./resolve/index.mjs";
 import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket } from "./drafter.mjs";
+import { sttMode, transcribe, splitWake } from "./speech.mjs";
+import { readWord } from "./reader.mjs";
+import { DOMAIN_TERMS } from "./resolve/domain-terms.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
 const MOCK = process.env.QLOO_MOCK === "1" || process.argv.includes("--mock");
 const PORT = Number(process.env.PORT ?? 8787);
+// Hosted demo gate: camera, voice, the agent and lesson drafting spend money; reviewed lessons stay open.
+const PASSCODE = String(process.env.DEMO_PASSCODE ?? "").trim();
 
 // Optional extra terms from a module outside this repo (GLOO_ENGINE_MODULE). Absent = bundled samples only.
 let ENGINE = "gloo-open";
@@ -31,6 +36,8 @@ if (process.env.GLOO_ENGINE_MODULE) {
 }
 
 setVocabulary(listTerms());
+// Recognition hints for spoken capture: every lesson title and alias, the domain list, and the wake phrase.
+const SPEECH_HINTS = [...new Set(["gloo it", ...listTerms().flatMap((t) => [t.title.replace(/\s*\(.*?\)\s*/g, " ").trim(), ...(t.aliases ?? [])]), ...DOMAIN_TERMS])];
 
 // A term is either a reviewed packet or this learner's own provisional draft.
 function termFor(sid, id) {
@@ -50,7 +57,10 @@ function promptFor(sid, promptId) {
 
 const app = express();
 app.disable("x-powered-by");
-app.use(express.json({ limit: "32kb" }));
+// Media routes carry a camera crop or a few seconds of PCM; everything else stays small.
+const smallJson = express.json({ limit: "32kb" });
+const mediaJson = express.json({ limit: "3mb" });
+app.use((req, res, next) => (["/api/glue", "/api/transcribe"].includes(req.path) ? mediaJson : smallJson)(req, res, next));
 
 // Server-issued anonymous session. A browser-supplied learner ID is never authorization.
 app.use((req, res, next) => {
@@ -64,6 +74,10 @@ app.use((req, res, next) => {
   req.sid = sid;
   next();
 });
+
+const unlocked = (sid) => !PASSCODE || Boolean(q.isUnlocked.get(sid)?.unlocked);
+const locked = (res) => res.status(401).json({ error: "This demo needs a passcode for camera, voice and the agent.", code: "PASSCODE_REQUIRED" });
+const gate = (req, res, next) => (unlocked(req.sid) ? next() : locked(res));
 
 const blocked = (summary, code, recovery) =>
   ({ status: "error", summary, results: [], result_count: 0, error: { code, retryable: false, recovery } });
@@ -90,9 +104,20 @@ app.get("/api/health", wrap(async (req, res) => {
     try { qloo.ready = (await readiness()).ready; } catch (e) { qloo = { mode: "live", ready: false, error: e.message }; }
   }
   const agent = agentMode() === "live" ? { mode: "live", model: MODEL } : MOCK ? { mode: "synthetic" } : { mode: "unavailable" };
-  res.json({ qloo, agent, engine: ENGINE, schedule_policy: POLICY.version,
+  const stt = MOCK ? "mock" : await sttMode();
+  res.json({ qloo, agent, stt, camera: agentMode() === "live" ? "live" : MOCK ? "mock" : "unavailable",
+    gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), engine: ENGINE, schedule_policy: POLICY.version,
     unavailable: ["pronunciation scoring", "glasses input", "rewards", "encounter detection"] });
 }));
+
+app.post("/api/unlock", (req, res) => {
+  if (!PASSCODE) return res.json({ unlocked: true });
+  const given = String(req.body?.code ?? "").trim();
+  const h = (s) => createHash("sha256").update(s.toLowerCase()).digest();
+  if (!given || !timingSafeEqual(h(given), h(PASSCODE))) return res.status(403).json({ error: "That passcode didn't match.", unlocked: false });
+  q.unlock.run(req.sid);
+  res.json({ unlocked: true });
+});
 
 // ---- Terms (no answers ever leave the server) ----
 app.get("/api/terms", (req, res) => res.json([
@@ -119,6 +144,26 @@ app.post("/api/terms/:id/first-attempt", (req, res) => {
   res.json({ saved: true });
 });
 
+// ---- Spoken input anywhere (first attempt, practice answers): PCM in, transcript out ----
+app.post("/api/transcribe", gate, wrap(async (req, res) => {
+  const pcm16 = String(req.body?.pcm16 ?? "");
+  if (pcm16.length < 2000) return res.status(400).json({ error: "Too short. Hold the mic and say it." });
+  if (MOCK) return res.json({ transcript: "gloo it", alternatives: [], provider: "mock" });
+  if ((await sttMode()) !== "google") return res.status(503).json({ error: "Server speech isn't configured.", code: "STT_UNAVAILABLE" });
+  const lim = take("stt", req.sid);
+  if (!lim.ok) return res.status(429).json({ error: lim.reason });
+  const t0 = performance.now();
+  try {
+    const out = await transcribe({ pcm16, hints: SPEECH_HINTS });
+    q.logCall.run(req.sid, "google-stt", "recognize", out.transcript ? "ok" : "empty", null, performance.now() - t0, Date.now());
+    res.json({ ...out, provider: "google" });
+  } catch (e) {
+    q.logCall.run(req.sid, "google-stt", "recognize", "error", null, performance.now() - t0, Date.now());
+    console.error("stt:", e.message);
+    res.status(502).json({ error: "Couldn't transcribe that. Try again or type it.", code: "STT_FAILED" });
+  }
+}));
+
 // ---- Qloo cue discovery ----
 app.post("/api/cues/resolve", wrap(async (req, res) => {
   const entity = String(req.body?.entity ?? "").trim().slice(0, 80);
@@ -128,7 +173,7 @@ app.post("/api/cues/resolve", wrap(async (req, res) => {
   res.json({ request: { operation: "describe", args }, envelope, items: toItems(envelope) });
 }));
 
-app.post("/api/cues/agent", wrap(async (req, res) => {
+app.post("/api/cues/agent", gate, wrap(async (req, res) => {
   const t = termFor(req.sid, req.body?.term_id);
   if (!t) return res.status(404).json({ error: "unknown term" });
   if (!q.getFirst.get(req.sid, t.id)) return res.status(409).json({ error: "save the first attempt first" });
@@ -165,11 +210,60 @@ app.post("/api/cues/agent", wrap(async (req, res) => {
 app.get("/api/learner/cues/:termId", (req, res) => res.json(q.cuesFor.all(req.sid, req.params.termId)));
 
 // ---- Gloo it: capture -> resolve (libraries first, LLM for close calls/misses) -> lesson ----
+// Modes: typed {text} · voice {text} or {pcm16, image?} · camera {image} · ocr {words} (legacy on-device OCR).
+// A held mic says either the word ("cholecystokinin") or the wake phrase ("gloo it") over a framed word.
 app.post("/api/glue", wrap(async (req, res) => {
-  const mode = ["typed", "voice", "ocr"].includes(req.body?.mode) ? req.body.mode : "typed";
+  const mode = ["typed", "voice", "ocr", "camera"].includes(req.body?.mode) ? req.body.mode : "typed";
   let text = String(req.body?.text ?? "").slice(0, 120);
   let alternatives = [];
-  if (mode === "ocr") {
+  let transcript = null;
+  let captured = mode;
+  const image = typeof req.body?.image === "string" && req.body.image.length > 100 ? req.body.image.slice(0, 2_000_000) : null;
+  const mime = ["image/jpeg", "image/png", "image/webp"].includes(req.body?.mime) ? req.body.mime : "image/jpeg";
+
+  if (mode === "voice" && typeof req.body?.pcm16 === "string") {
+    if (!unlocked(req.sid)) return locked(res);
+    if (MOCK) transcript = "gloo it";
+    else {
+      if ((await sttMode()) !== "google") return res.status(503).json({ error: "Server speech isn't configured.", code: "STT_UNAVAILABLE" });
+      const lim = take("stt", req.sid);
+      if (!lim.ok) return res.status(429).json({ error: lim.reason });
+      const t0 = performance.now();
+      try {
+        transcript = (await transcribe({ pcm16: req.body.pcm16, hints: SPEECH_HINTS })).transcript;
+        q.logCall.run(req.sid, "google-stt", "recognize", transcript ? "ok" : "empty", null, performance.now() - t0, Date.now());
+      } catch (e) {
+        q.logCall.run(req.sid, "google-stt", "recognize", "error", null, performance.now() - t0, Date.now());
+        console.error("stt:", e.message);
+        return res.status(502).json({ error: "Couldn't hear that. Try again, or tap Gloo it to read the word.", code: "STT_FAILED" });
+      }
+    }
+  }
+  if (mode === "voice") {
+    const { wake, rest } = splitWake(transcript ?? text);
+    if (rest) text = rest;
+    else if (image) captured = "camera"; // "gloo it" over a framed word: read the frame
+    else return res.status(422).json({ error: wake ? "Heard “gloo it”, but no word. Say the word, or frame it and tap Gloo it." : "Didn't catch a word. Try again or type it.", transcript });
+  }
+
+  if (captured === "camera") {
+    if (!image) return res.status(400).json({ error: "image is required" });
+    if (!unlocked(req.sid)) return locked(res);
+    let read;
+    if (MOCK) read = { word: "cholecystokinin", alternatives: ["gallbladder"], confidence: "high" };
+    else if (agentMode() !== "live") return res.status(503).json({ error: "Camera reading needs the lesson agent, which isn't configured here." });
+    else {
+      const lim = take("camera", req.sid);
+      if (!lim.ok) return res.status(429).json({ error: lim.reason });
+      const t0 = performance.now();
+      try { read = await readWord({ image, mime }); q.logCall.run(req.sid, "anthropic", "read_word", read.word ? "ok" : "empty", null, performance.now() - t0, Date.now()); }
+      catch (e) { q.logCall.run(req.sid, "anthropic", "read_word", "error", null, performance.now() - t0, Date.now()); console.error("read_word:", e.message);
+        return res.status(502).json({ error: "Couldn't read the frame right now. Try again, say it, or type it." }); }
+    }
+    if (!read.word) return res.status(422).json({ error: "No word in the frame. Get closer and hold steady, or say it." });
+    text = read.word;
+    alternatives = read.alternatives;
+  } else if (mode === "ocr") {
     const words = (Array.isArray(req.body?.words) ? req.body.words : String(text).split(/\s+/)).slice(0, 400).map((w) => String(w).slice(0, 60));
     const picked = pickFromOcr(words);
     if (!picked.pick) return res.status(422).json({ error: "No word found in the photo. Try again closer, or type it." });
@@ -179,10 +273,10 @@ app.post("/api/glue", wrap(async (req, res) => {
   const pii = findPersonalData(text);
   if (pii) return res.status(400).json({ error: `That looks like a ${pii}. Gloo a word or term instead.` });
 
-  const local = resolveLocal(text, mode);
+  const local = resolveLocal(text, captured === "camera" ? "typed" : mode);
   let best = local.decision === "resolved" ? local.best : null;
   if (!best && local.decision !== "resolved" && local.normalized) {
-    if (agentMode() === "live") {
+    if (agentMode() === "live" && unlocked(req.sid)) {
       const lim = take("agent", req.sid);
       if (lim.ok) {
         try { best = await resolveWithLlm(local); q.logCall.run(req.sid, "anthropic", "resolve_term", best ? "ok" : "empty", null, null, Date.now()); }
@@ -194,7 +288,8 @@ app.post("/api/glue", wrap(async (req, res) => {
     if (!best && local.normalized) best = { word: local.normalized, term_id: null, score: null, method: "as captured" };
   }
   if (!best) return res.status(422).json({ error: "Nothing to gloo. Try a word or short term." });
-  q.logResolution.run(req.sid, mode, text, best.word, best.term_id, best.method, best.score, local.decision, Date.now());
+  const method = captured === "camera" ? `camera · ${best.method}` : best.method;
+  q.logResolution.run(req.sid, captured, text, best.word, best.term_id, method, best.score, local.decision, Date.now());
 
   // Re-check: an LLM answer may name a reviewed lesson.
   const recheck = best.term_id ? null : resolveLocal(best.word).best;
@@ -202,13 +297,14 @@ app.post("/api/glue", wrap(async (req, res) => {
   let termId = reviewed?.id ?? q.provisionalByWord.get(req.sid, best.word)?.id ?? null;
   let created = false;
   if (!termId) {
+    if (!unlocked(req.sid)) return locked(res);
     const id = `p-${randomBytes(5).toString("hex")}`;
     let packet;
     if (agentMode() === "live") {
       const lim = take("agent", req.sid);
       if (!lim.ok) return res.status(429).json({ error: lim.reason });
       try { packet = await draftLesson(id, best.word); q.logCall.run(req.sid, "anthropic", "draft_lesson", "ok", null, null, Date.now()); }
-      catch { q.logCall.run(req.sid, "anthropic", "draft_lesson", "error", null, null, Date.now());
+      catch (e) { q.logCall.run(req.sid, "anthropic", "draft_lesson", "error", null, null, Date.now()); console.error("draft_lesson:", e.message);
         return res.status(502).json({ error: "Couldn't draft a lesson for that word right now. Try a reviewed lesson." }); }
     } else if (MOCK) {
       packet = syntheticLesson(id, best.word);
@@ -219,13 +315,13 @@ app.post("/api/glue", wrap(async (req, res) => {
     termId = id;
     created = true;
   }
-  // Spoken capture of an unfamiliar word doubles as the first attempt, saved before anything is shown.
-  if (mode === "voice" && !q.getFirst.get(req.sid, termId)) {
+  // Spoken capture of a word doubles as the first attempt, saved before anything is shown.
+  if (mode === "voice" && captured === "voice" && !q.getFirst.get(req.sid, termId)) {
     const t = termFor(req.sid, termId);
     q.putFirst.run(req.sid, termId, `voice capture: "${text}" (speech-to-text transcript, not a pronunciation score)`, 0, t.version, Date.now());
   }
-  res.json({ term_id: termId, created, resolution: { input: text, mode, word: best.word, method: best.method, score: best.score, decision: local.decision },
-    alternatives });
+  res.json({ term_id: termId, created, transcript,
+    resolution: { input: text, mode: captured, word: best.word, method, score: best.score, decision: local.decision }, alternatives });
 }));
 
 app.post("/api/learner/cues", (req, res) => {
@@ -337,8 +433,9 @@ if (existsSync(dist)) {
 }
 
 app.use((err, _req, res, _next) => {
+  if (err?.type === "entity.too.large") return res.status(413).json({ error: "That capture is too large. Try again." });
   console.error(err.message); // never log request bodies or headers
   res.status(500).json({ error: "Server error." });
 });
 
-app.listen(PORT, () => console.log(`qloo-gloo on :${PORT} · Qloo ${MOCK ? "MOCK" : "live"} · agent ${agentMode()} · engine ${ENGINE}`));
+app.listen(PORT, () => console.log(`qloo-gloo on :${PORT} · Qloo ${MOCK ? "MOCK" : "live"} · agent ${agentMode()} · engine ${ENGINE}${PASSCODE ? " · passcode gate on" : ""}`));

@@ -34,8 +34,15 @@ CREATE TABLE IF NOT EXISTS provider_calls (
   id INTEGER PRIMARY KEY, sid TEXT, provider TEXT NOT NULL, op TEXT NOT NULL, status TEXT NOT NULL, cache TEXT, duration_ms REAL, created_at INTEGER NOT NULL);
 `);
 
+// Demo passcode gate: one flag per server-issued session.
+if (!db.prepare("PRAGMA table_info(learners)").all().some((c) => c.name === "unlocked")) {
+  db.exec("ALTER TABLE learners ADD COLUMN unlocked INTEGER NOT NULL DEFAULT 0");
+}
+
 export const q = {
   ensureLearner: db.prepare("INSERT OR IGNORE INTO learners (sid, created_at) VALUES (?, ?)"),
+  isUnlocked: db.prepare("SELECT unlocked FROM learners WHERE sid = ?"),
+  unlock: db.prepare("UPDATE learners SET unlocked = 1 WHERE sid = ?"),
   getFirst: db.prepare("SELECT * FROM first_attempts WHERE sid = ? AND term_id = ?"),
   putFirst: db.prepare("INSERT OR IGNORE INTO first_attempts VALUES (?, ?, ?, ?, ?, ?)"),
   attemptByKey: db.prepare("SELECT * FROM attempts WHERE sid = ? AND idem_key = ?"),

@@ -68,7 +68,7 @@ export const cck = {
       ["chole", "cck", "component of"], ["cysto", "cck", "component of"], ["kin", "cck", "component of"], ["cck", "contract", "biological function"],
     ],
   },
-  first_attempt: { question: "How would you say “cholecystokinin”? Type your best attempt, sound it out however you like." },
+  first_attempt: { question: "How would you say it? Sound it out however you like. A guess is fine." },
   prompts: [
     { id: "cck-chole", skill: "meaning", type: "text", question: "What does the word part chole mean?",
       hint: "Cola ≈ chole.", rubric: { any: [/\bbile\b/] }, misconceptions: [[/cola|soda/, "Cola is the sound cue. What does chole mean?"]],
