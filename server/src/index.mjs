@@ -14,6 +14,8 @@ import { assess } from "./assess.mjs";
 import { deriveSkill, POLICY } from "./scheduler.mjs";
 import { listTerms, getTerm, findPrompt, publicTerm, publicPrompt, addTerms } from "./content/index.mjs";
 import { runCueAgent, runSyntheticAgent, agentMode, MODEL } from "./agent.mjs";
+import { setVocabulary, resolveLocal, pickFromOcr } from "./resolve/index.mjs";
+import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket } from "./drafter.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
@@ -26,6 +28,24 @@ if (process.env.GLOO_ENGINE_MODULE) {
   const mod = await import(pathToFileURL(resolve(repoRoot, process.env.GLOO_ENGINE_MODULE)).href);
   addTerms(mod.terms ?? []);
   ENGINE = mod.ENGINE_NAME ?? "gloo-external";
+}
+
+setVocabulary(listTerms());
+
+// A term is either a reviewed packet or this learner's own provisional draft.
+function termFor(sid, id) {
+  const t = getTerm(id);
+  if (t) return t;
+  const row = typeof id === "string" && id.startsWith("p-") ? q.provisionalById.get(id, sid) : null;
+  return row ? compilePacket(JSON.parse(row.packet)) : null;
+}
+function promptFor(sid, promptId) {
+  const found = findPrompt(promptId);
+  if (found) return found;
+  const m = /^(p-[a-f0-9]{10})-q\d+$/.exec(String(promptId ?? ""));
+  const term = m && termFor(sid, m[1]);
+  const prompt = term?.prompts.find((p) => p.id === promptId);
+  return prompt ? { term, prompt } : null;
 }
 
 const app = express();
@@ -71,14 +91,17 @@ app.get("/api/health", wrap(async (req, res) => {
   }
   const agent = agentMode() === "live" ? { mode: "live", model: MODEL } : MOCK ? { mode: "synthetic" } : { mode: "unavailable" };
   res.json({ qloo, agent, engine: ENGINE, schedule_policy: POLICY.version,
-    unavailable: ["speech scoring", "camera/OCR capture", "glasses input", "rewards", "encounter detection"] });
+    unavailable: ["pronunciation scoring", "glasses input", "rewards", "encounter detection"] });
 }));
 
 // ---- Terms (no answers ever leave the server) ----
-app.get("/api/terms", (_req, res) => res.json(listTerms().map((t) => ({ id: t.id, title: t.title, summary: t.summary }))));
+app.get("/api/terms", (req, res) => res.json([
+  ...listTerms().map((t) => ({ id: t.id, title: t.title, summary: t.summary, provisional: false })),
+  ...q.provisionalFor.all(req.sid).map((r) => { const p = JSON.parse(r.packet); return { id: r.id, title: p.title, summary: p.summary, provisional: true, origin: r.origin }; }),
+]));
 
 app.get("/api/terms/:id", (req, res) => {
-  const t = getTerm(req.params.id);
+  const t = termFor(req.sid, req.params.id);
   if (!t) return res.status(404).json({ error: "unknown term" });
   const first = q.getFirst.get(req.sid, t.id);
   // The lesson unlocks only after the first attempt is saved or explicitly skipped.
@@ -87,7 +110,7 @@ app.get("/api/terms/:id", (req, res) => {
 });
 
 app.post("/api/terms/:id/first-attempt", (req, res) => {
-  const t = getTerm(req.params.id);
+  const t = termFor(req.sid, req.params.id);
   if (!t) return res.status(404).json({ error: "unknown term" });
   const skipped = req.body?.skipped === true;
   const response = skipped ? null : String(req.body?.response ?? "").slice(0, 400);
@@ -106,7 +129,7 @@ app.post("/api/cues/resolve", wrap(async (req, res) => {
 }));
 
 app.post("/api/cues/agent", wrap(async (req, res) => {
-  const t = getTerm(req.body?.term_id);
+  const t = termFor(req.sid, req.body?.term_id);
   if (!t) return res.status(404).json({ error: "unknown term" });
   if (!q.getFirst.get(req.sid, t.id)) return res.status(409).json({ error: "save the first attempt first" });
   const familiar = (req.body?.familiar ?? []).map((f) => String(f).trim().slice(0, 60)).filter(Boolean).slice(0, 6);
@@ -141,8 +164,72 @@ app.post("/api/cues/agent", wrap(async (req, res) => {
 // ---- Learner cue choices (explicit recognition required) ----
 app.get("/api/learner/cues/:termId", (req, res) => res.json(q.cuesFor.all(req.sid, req.params.termId)));
 
+// ---- Gloo it: capture -> resolve (libraries first, LLM for close calls/misses) -> lesson ----
+app.post("/api/glue", wrap(async (req, res) => {
+  const mode = ["typed", "voice", "ocr"].includes(req.body?.mode) ? req.body.mode : "typed";
+  let text = String(req.body?.text ?? "").slice(0, 120);
+  let alternatives = [];
+  if (mode === "ocr") {
+    const words = (Array.isArray(req.body?.words) ? req.body.words : String(text).split(/\s+/)).slice(0, 400).map((w) => String(w).slice(0, 60));
+    const picked = pickFromOcr(words);
+    if (!picked.pick) return res.status(422).json({ error: "No word found in the photo. Try again closer, or type it." });
+    text = picked.pick;
+    alternatives = picked.alternatives;
+  }
+  const pii = findPersonalData(text);
+  if (pii) return res.status(400).json({ error: `That looks like a ${pii}. Gloo a word or term instead.` });
+
+  const local = resolveLocal(text, mode);
+  let best = local.decision === "resolved" ? local.best : null;
+  if (!best && local.decision !== "resolved" && local.normalized) {
+    if (agentMode() === "live") {
+      const lim = take("agent", req.sid);
+      if (lim.ok) {
+        try { best = await resolveWithLlm(local); q.logCall.run(req.sid, "anthropic", "resolve_term", best ? "ok" : "empty", null, null, Date.now()); }
+        catch { q.logCall.run(req.sid, "anthropic", "resolve_term", "error", null, null, Date.now()); }
+      }
+    }
+    // Without the LLM, a reasonable best guess beats a dead end; it is labeled as such.
+    if (!best && local.best && local.decision === "ambiguous") best = { ...local.best, method: `${local.best.method} (best guess)` };
+    if (!best && local.normalized) best = { word: local.normalized, term_id: null, score: null, method: "as captured" };
+  }
+  if (!best) return res.status(422).json({ error: "Nothing to gloo. Try a word or short term." });
+  q.logResolution.run(req.sid, mode, text, best.word, best.term_id, best.method, best.score, local.decision, Date.now());
+
+  // Re-check: an LLM answer may name a reviewed lesson.
+  const recheck = best.term_id ? null : resolveLocal(best.word).best;
+  const reviewed = getTerm(best.term_id ?? (recheck?.method === "exact" ? recheck.term_id : null));
+  let termId = reviewed?.id ?? q.provisionalByWord.get(req.sid, best.word)?.id ?? null;
+  let created = false;
+  if (!termId) {
+    const id = `p-${randomBytes(5).toString("hex")}`;
+    let packet;
+    if (agentMode() === "live") {
+      const lim = take("agent", req.sid);
+      if (!lim.ok) return res.status(429).json({ error: lim.reason });
+      try { packet = await draftLesson(id, best.word); q.logCall.run(req.sid, "anthropic", "draft_lesson", "ok", null, null, Date.now()); }
+      catch { q.logCall.run(req.sid, "anthropic", "draft_lesson", "error", null, null, Date.now());
+        return res.status(502).json({ error: "Couldn't draft a lesson for that word right now. Try a reviewed lesson." }); }
+    } else if (MOCK) {
+      packet = syntheticLesson(id, best.word);
+    } else {
+      return res.status(503).json({ error: "New words need the lesson agent, which isn't configured here. Try a reviewed lesson." });
+    }
+    q.addProvisional.run(id, req.sid, best.word, packet.origin, JSON.stringify(packet), Date.now());
+    termId = id;
+    created = true;
+  }
+  // Spoken capture of an unfamiliar word doubles as the first attempt, saved before anything is shown.
+  if (mode === "voice" && !q.getFirst.get(req.sid, termId)) {
+    const t = termFor(req.sid, termId);
+    q.putFirst.run(req.sid, termId, `voice capture: "${text}" (speech-to-text transcript, not a pronunciation score)`, 0, t.version, Date.now());
+  }
+  res.json({ term_id: termId, created, resolution: { input: text, mode, word: best.word, method: best.method, score: best.score, decision: local.decision },
+    alternatives });
+}));
+
 app.post("/api/learner/cues", (req, res) => {
-  const t = getTerm(req.body?.term_id);
+  const t = termFor(req.sid, req.body?.term_id);
   if (!t) return res.status(404).json({ error: "unknown term" });
   const b = req.body;
   if (!t.roles.some((r) => r.id === b.role)) return res.status(400).json({ error: "unknown role" });
@@ -171,7 +258,7 @@ app.delete("/api/learner/cues/:id", (req, res) => {
 
 // ---- Practice: one prompt at a time, answers held server-side ----
 app.get("/api/practice/:termId/next", (req, res) => {
-  const t = getTerm(req.params.termId);
+  const t = termFor(req.sid, req.params.termId);
   if (!t) return res.status(404).json({ error: "unknown term" });
   const attempts = q.attemptsFor.all(req.sid, t.id);
   const doneIndependent = new Set(attempts.filter((a) => a.outcome === "correct" && a.independent).map((a) => a.prompt_id));
@@ -182,14 +269,14 @@ app.get("/api/practice/:termId/next", (req, res) => {
 });
 
 app.post("/api/practice/hint", (req, res) => {
-  const found = findPrompt(req.body?.prompt_id);
+  const found = promptFor(req.sid, req.body?.prompt_id);
   if (!found?.prompt.hint) return res.status(404).json({ error: "no hint" });
   if (!q.openHint.get(req.sid, found.prompt.id)) q.addHint.run(req.sid, found.prompt.id, Date.now());
   res.json({ hint: found.prompt.hint });
 });
 
 app.post("/api/attempts", (req, res) => {
-  const found = findPrompt(req.body?.prompt_id);
+  const found = promptFor(req.sid, req.body?.prompt_id);
   if (!found) return res.status(404).json({ error: "unknown prompt" });
   const idem = String(req.body?.idempotency_key ?? "");
   if (!/^[A-Za-z0-9-]{8,64}$/.test(idem)) return res.status(400).json({ error: "idempotency_key is required" });
@@ -203,7 +290,7 @@ app.post("/api/attempts", (req, res) => {
   const independent = result.outcome === "correct" && !hinted;
   try {
     db.exec("BEGIN IMMEDIATE");
-    q.insertAttempt.run(req.sid, term.id, prompt.id, prompt.skill, response, result.outcome, hinted ? 1 : 0, independent ? 1 : 0, term.version, idem, Date.now());
+    q.insertAttempt.run(req.sid, term.id, prompt.id, prompt.skill, response, result.outcome, hinted ? 1 : 0, independent ? 1 : 0, term.version, term.review.status, idem, Date.now());
     q.consumeHints.run(req.sid, prompt.id);
     db.exec("COMMIT");
   } catch (e) {
@@ -214,12 +301,12 @@ app.post("/api/attempts", (req, res) => {
     }
     throw e;
   }
-  res.json({ ...result, hinted, independent, skill: prompt.skill,
+  res.json({ ...result, hinted, independent, skill: prompt.skill, provisional: Boolean(term.provisional),
     note: hinted && result.outcome === "correct" ? "Correct with a hint: practice, but not independent recall." : null });
 });
 
 app.get("/api/progress/:termId", (req, res) => {
-  const t = getTerm(req.params.termId);
+  const t = termFor(req.sid, req.params.termId);
   if (!t) return res.status(404).json({ error: "unknown term" });
   const attempts = q.attemptsFor.all(req.sid, t.id);
   const skills = {};
@@ -227,7 +314,7 @@ app.get("/api/progress/:termId", (req, res) => {
     skills[skill] = deriveSkill(attempts.filter((a) => a.skill === skill), Date.now());
   }
   skills.pronunciation = { state: "not assessed", note: "Speech scoring is not configured in this build." };
-  res.json({ term_id: t.id, skills, first_attempt: q.getFirst.get(req.sid, t.id) ?? null });
+  res.json({ term_id: t.id, provisional: Boolean(t.provisional), skills, first_attempt: q.getFirst.get(req.sid, t.id) ?? null });
 });
 
 // ---- Learner data controls ----

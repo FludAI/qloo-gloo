@@ -6,16 +6,25 @@ import CueAgent from "./components/CueAgent.jsx";
 import Practice from "./components/Practice.jsx";
 import Progress from "./components/Progress.jsx";
 import Provenance from "./components/Provenance.jsx";
+import GlueIt, { Resolution } from "./components/GlueIt.jsx";
 
 export default function App() {
   const [health, setHealth] = useState(null);
   const [terms, setTerms] = useState([]);
   const [termId, setTermId] = useState(null);
+  const [glued, setGlued] = useState(null);
+  const [version, setVersion] = useState(0);
 
+  const loadTerms = () => api.terms().then((t) => { setTerms(t); setTermId((id) => id ?? t[0]?.id); });
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ offline: true }));
-    api.terms().then((t) => { setTerms(t); setTermId((id) => id ?? t[0]?.id); });
+    loadTerms();
   }, []);
+  const onGlued = async (result) => {
+    await loadTerms();
+    setGlued(result); setTermId(result.term_id); setVersion((v) => v + 1);
+  };
+  const regue = async (body) => { try { onGlued(await api.glue(body)); } catch { /* shown in GlueIt on next try */ } };
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:px-6">
@@ -33,16 +42,19 @@ export default function App() {
         </p>
       </header>
 
+      <div className="mt-6"><GlueIt onGlued={onGlued} /></div>
+
       <nav className="mt-6 flex flex-wrap gap-2" aria-label="Lessons">
         {terms.map((t) => (
           <button key={t.id} onClick={() => setTermId(t.id)} aria-current={t.id === termId}
             className={`rounded-full border px-4 py-1.5 text-sm transition ${t.id === termId ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"}`}>
-            {t.title}
+            {t.title}{t.provisional && <span className="ml-1 font-mono text-[10px] opacity-70">draft</span>}
           </button>
         ))}
       </nav>
 
-      {termId && <TermView key={termId} termId={termId} health={health} />}
+      {glued?.term_id === termId && <Resolution glued={glued} onRegue={regue} />}
+      {termId && <TermView key={`${termId}:${version}`} termId={termId} health={health} />}
 
       <footer className="mt-10 space-y-2 text-xs text-muted">
         <p>Qloo results describe what groups tend to like, not what one person knows or will do. You confirm every cue.</p>

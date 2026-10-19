@@ -16,7 +16,13 @@ word family, and the **Brier score**.
 
 The learner:
 
-1. Makes a first attempt. It's saved before the lesson opens.
+0. **Glues a word** from their phone: points the camera at it, says it however
+   it sounds to them, or types it. No spelling confirmation — the server resolves
+   it with dictionary, spelling and sound-alike libraries, and asks Claude only for
+   close calls. Words without a reviewed lesson get a clearly labeled provisional
+   lesson drafted by the agent.
+1. Makes a first attempt. It's saved before the lesson opens. (A spoken capture
+   counts as the first attempt.)
 2. Reads the lesson: real meanings, sources, and a typed map that keeps
    *memory cues* visibly separate from *actual meanings*.
 3. Names a few public things they know (brands, films, books, shows). **The cue
@@ -58,6 +64,8 @@ Express server (Node 22)
    ├─ assess.mjs      deterministic scoring, Brier math with validation
    ├─ scheduler.mjs   per-skill spaced review, injected clock, versioned policy
    ├─ db.mjs          SQLite (node:sqlite), server-issued sessions
+   ├─ resolve/        Gloo it word resolution (Levenshtein, Double Metaphone, Hunspell)
+   ├─ drafter.mjs     LLM backup for close calls; provisional lesson drafts
    ├─ agent.mjs       Claude tool-use loop ──► Qloo tools
    └─ qloo.mjs        one long-lived `qloo mcp` process (@qloo/qloo-harness)
                          └─► hackathon.api.qloo.com
@@ -86,7 +94,7 @@ cp .env.example .env                           # add ANTHROPIC_API_KEY for the a
 npm install
 npm run dev                                    # http://localhost:5173
 npm run smoke                                  # second terminal
-npm test                                       # 18 domain + API tests
+npm test                                       # 30 domain, resolver and API tests
 ```
 
 **PowerShell:** the same, but use `setx QLOO_BASE_URL ...` (then open a new
@@ -106,9 +114,18 @@ synthetic agent.
 | Qloo path through `qloo mcp` | Implemented; reached the hackathon API (401 with a test key). Live results pending key |
 | Cue agent (Claude + Qloo tools, ID verification) | Implemented; loop tested against a fake provider. Live run pending key |
 | Spaced review schedule | Implemented (pilot policy; simulated time is not retention evidence) |
-| Speech scoring, camera/OCR, glasses input, encounter detection, rewards | Not in this build; shown as unavailable |
+| Gloo it: camera (on-device OCR), voice (browser speech), typed | Implemented; OCR tested in headless Chromium. Voice needs a real phone browser |
+| Word resolution (exact / spelling / sound-alike / dictionary, LLM backup) | Implemented, tested |
+| Provisional lessons for new words | Implemented; drafting tested against a fake provider. Live drafting pending key |
+| Pronunciation scoring, glasses input, encounter detection, rewards | Not in this build; shown as unavailable |
+
+Design decisions, including where this build departs from the Gloo spec, are in
+[docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Limitations
+
+- Provisional lessons are AI drafts. They are labeled everywhere and should be
+  checked against a trusted source.
 
 - Qloo results describe what groups tend to like, not what one person knows.
 - Sound cues are approximate memory aids, not phonetics or etymology.

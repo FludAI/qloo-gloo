@@ -15,6 +15,23 @@ before(async () => {
   fake = createServer((req, res) => {
     let body = ""; req.on("data", (c) => (body += c));
     req.on("end", () => {
+      const forcedTool = JSON.parse(body || "{}").tool_choice?.name;
+      res.setHeader("content-type", "application/json");
+      if (forcedTool === "resolve_term") {
+        return res.end(JSON.stringify(reply([{ type: "tool_use", id: "r1", name: "resolve_term", input: { term: "Breyers", reason: "brand name" } }])));
+      }
+      if (forcedTool === "draft_lesson") {
+        return res.end(JSON.stringify(reply([{ type: "tool_use", id: "d1", name: "draft_lesson", input: {
+          title: "Peristalsis", pronunciation_approx: "pair-ih-STAL-sis", summary: "peri (around) + stalsis (contraction)",
+          definition: "Wave-like muscle contractions that move food through the digestive tract.",
+          components: [{ part: "peri", meaning: "around" }, { part: "stalsis", meaning: "contraction" }],
+          roles: [{ id: "peri", label: "peri = around", target: "around", look_for: "something that goes around" },
+            { id: "stalsis", label: "stalsis = contraction", target: "squeeze", look_for: "something that squeezes" }],
+          prompts: [{ skill: "meaning", type: "text", question: "What does peri mean?", accept_any: ["around", "surround"], answer: "Around." },
+            { skill: "meaning", type: "text", question: "What does peristalsis do?", accept_all: [["move", "push", "propel"], ["food", "digest"]], answer: "Moves food along." },
+            { skill: "transfer", type: "text", question: "Perimeter: what does peri tell you?", accept_any: ["around"], answer: "Around." }],
+          sources: [{ label: "bad", url: "javascript:alert(1)" }] } }])));
+      }
       calls++;
       const msg = calls === 1
         ? reply([{ type: "tool_use", id: "t1", name: "qloo_describe", input: { entity: "Breyers", type: "brand" } }])
@@ -22,7 +39,7 @@ before(async () => {
             { role: "sound", label: "Breyers", qloo_entity_id: "mock-breyers", qloo_entity_type: "brand", connection_type: "approximate sound", connection: "Breyers ≈ Brier", grounding: "resolved" },
             { role: "endpoints", label: "Invented", qloo_entity_id: "made-up-id", qloo_entity_type: "book", connection_type: "reinforcement", connection: "x", grounding: "y" },
             { role: "not-a-role", label: "Bad", qloo_entity_id: null, connection_type: "meaning", connection: "x", grounding: "y" } ] } }]);
-      res.setHeader("content-type", "application/json"); res.end(JSON.stringify(msg));
+      res.end(JSON.stringify(msg));
     });
   }).listen(8798);
   proc = spawn(process.execPath, [SERVER, "--mock"], {
@@ -119,4 +136,49 @@ test("personal data is blocked before any Qloo call", async () => {
   await s("POST", "/api/terms/brier-score/first-attempt", { skipped: true });
   assert.equal((await s("POST", "/api/cues/agent", { term_id: "brier-score", familiar: ["me@example.com"] })).status, 400);
   assert.equal((await s("POST", "/api/cues/resolve", { entity: "415-555-1234" })).body.envelope.error.code, "PERSONAL_DATA_BLOCKED");
+});
+
+test("gloo it: a misspelled known term opens the reviewed lesson", async () => {
+  const s = session();
+  const { body } = await s("POST", "/api/glue", { text: "Gloo it cholecystokinen", mode: "typed" });
+  assert.equal(body.term_id, "cholecystokinin");
+  assert.equal(body.created, false);
+  assert.equal(body.resolution.method, "spelling");
+});
+
+test("gloo it: a new word gets a provisional lesson owned by this learner", async () => {
+  const s = session(), other = session();
+  const { body } = await s("POST", "/api/glue", { text: "peristalsis", mode: "typed" });
+  assert.match(body.term_id, /^p-[a-f0-9]{10}$/);
+  assert.equal(body.created, true);
+  assert.equal((await s("GET", `/api/terms/${body.term_id}`)).body.locked, true); // first attempt still first
+  await s("POST", `/api/terms/${body.term_id}/first-attempt`, { skipped: true });
+  const term = (await s("GET", `/api/terms/${body.term_id}`)).body;
+  assert.equal(term.provisional, true);
+  assert.equal(term.review.status, "provisional");
+  assert.equal(term.sources.length, 0); // non-http source dropped
+  assert.ok(!JSON.stringify(term).includes("Moves food along"));
+  const r = (await s("POST", "/api/attempts", { prompt_id: `${body.term_id}-q2`, response: "it pushes food through the gut", idempotency_key: "prov-attempt-1" })).body;
+  assert.equal(r.outcome, "correct");
+  assert.equal(r.provisional, true);
+  assert.equal((await other("GET", `/api/terms/${body.term_id}`)).status, 404);
+  assert.equal((await s("POST", "/api/glue", { text: "peristalsis", mode: "typed" })).body.created, false);
+});
+
+test("gloo it: a spoken capture is saved as the first attempt", async () => {
+  const s = session();
+  const { body } = await s("POST", "/api/glue", { text: "colla sisto kinin", mode: "voice" });
+  assert.equal(body.term_id, "cholecystokinin");
+  assert.equal(body.resolution.method, "sound-alike");
+  const t = (await s("GET", "/api/terms/cholecystokinin")).body;
+  assert.equal(t.locked, false);
+  assert.match(t.first_attempt_record.response, /colla sisto kinin/);
+});
+
+test("gloo it: close calls go to the LLM backup", async () => {
+  const s = session();
+  const { body } = await s("POST", "/api/glue", { text: "breyer", mode: "voice" });
+  assert.equal(body.resolution.decision, "ambiguous");
+  assert.equal(body.resolution.method, "ai");
+  assert.equal(body.resolution.word, "breyers");
 });

@@ -3,6 +3,11 @@ import ConceptMap from "./ConceptMap.jsx";
 export default function Lesson({ term }) {
   return (
     <section className="card">
+      {term.provisional && (
+        <p className="mb-3 rounded-xl border border-gloo bg-gloo-soft/50 p-3 text-sm">
+          <span className="font-medium">Provisional draft.</span> {term.origin === "synthetic" ? "Synthetic placeholder (mock mode)." : "Drafted by the agent; not reviewed."} Check it against a trusted source before relying on it.
+        </p>
+      )}
       <div className="step">02 · Lesson</div>
       <h2 className="mt-1 font-display text-3xl">{term.title}</h2>
       <p className="mt-1 font-mono text-sm text-muted">say it: {term.pronunciation.approx}</p>
@@ -34,11 +39,15 @@ export default function Lesson({ term }) {
       )}
       {term.scene && <p className="mt-3 rounded-xl bg-gloo-soft/50 p-3 text-sm"><span className="font-medium">Scene.</span> {term.scene}</p>}
 
-      <h3 className="mt-6 font-display text-xl">Keep these straight</h3>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{term.distinctions.map((d) => <li key={d}>{d}</li>)}</ul>
+      {term.distinctions?.length > 0 && (<>
+        <h3 className="mt-6 font-display text-xl">Keep these straight</h3>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{term.distinctions.map((d) => <li key={d}>{d}</li>)}</ul>
+      </>)}
 
-      <h3 className="mt-6 font-display text-xl">Map</h3>
-      <div className="mt-2"><ConceptMap graph={term.graph} /></div>
+      {term.graph?.edges?.length > 0 && (<>
+        <h3 className="mt-6 font-display text-xl">Map</h3>
+        <div className="mt-2"><ConceptMap graph={term.graph} /></div>
+      </>)}
 
       {term.transfer && (<>
         <h3 className="mt-6 font-display text-xl">Same operation, other worlds</h3>
@@ -52,8 +61,9 @@ export default function Lesson({ term }) {
       </>)}
 
       <p className="mt-6 text-xs text-muted">
-        Reviewed {term.review.reviewed_at} · content v{term.version} · Sources:{" "}
-        {term.sources.map((s, i) => <span key={s.url}>{i > 0 && " · "}<a className="underline" href={s.url} target="_blank" rel="noreferrer">{s.label}</a></span>)}
+        {term.provisional ? "Not reviewed" : `Reviewed ${term.review.reviewed_at}`} · content v{term.version}
+        {term.sources?.length > 0 && <> · {term.provisional ? "Sources suggested by the agent (unverified)" : "Sources"}:{" "}
+          {term.sources.map((s, i) => <span key={s.url}>{i > 0 && " · "}<a className="underline" href={s.url} target="_blank" rel="noreferrer">{s.label}</a></span>)}</>}
       </p>
     </section>
   );

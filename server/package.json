@@ -14,6 +14,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",
     "@modelcontextprotocol/sdk": "1.32.1",
-    "express": "4.22.3"
+    "dictionary-en": "4.0.0",
+    "double-metaphone": "2.0.1",
+    "express": "4.22.3",
+    "fastest-levenshtein": "1.0.16",
+    "nspell": "2.1.5"
   }
 }

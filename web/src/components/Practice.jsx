@@ -52,6 +52,7 @@ export default function Practice({ term, onAttempt }) {
           {result.answer && <div className="mt-1">Answer: {result.answer}</div>}
           {result.note && <div className="mt-1 text-muted">{result.note}</div>}
           {result.outcome === "uncertain" && <div className="mt-1 text-muted">Not counted. You can try again.</div>}
+          {result.provisional && <div className="mt-1 text-muted">Checked against an unreviewed draft.</div>}
           <button className="btn mt-3" onClick={() => load(p.id)}>Next</button>
         </div>
       )}

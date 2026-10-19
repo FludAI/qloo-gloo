@@ -14,6 +14,7 @@ const post = (p, b) => req("POST", p, b);
 export const api = {
   health: () => get("/api/health"),
   terms: () => get("/api/terms"),
+  glue: (body) => post("/api/glue", body),
   term: (id) => get(`/api/terms/${id}`),
   firstAttempt: (id, body) => post(`/api/terms/${id}/first-attempt`, body),
   agent: (term_id, familiar) => post("/api/cues/agent", { term_id, familiar }),

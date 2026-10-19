@@ -22,6 +22,9 @@ ok((await call("GET", "/api/terms/brier-score")).body.locked === false, "lesson 
 const a = (await call("POST", "/api/attempts", { prompt_id: "brier-mean", response: "0.065", idempotency_key: `smoke-${Date.now()}` })).body;
 ok(a.outcome === "correct" && a.independent, "Brier mean 0.065 scored correct and independent");
 
+const g = (await call("POST", "/api/glue", { text: "Gloo it, cholecystokinen", mode: "typed" })).body;
+ok(g.term_id === "cholecystokinin" && g.resolution.method === "spelling", "Gloo it resolves a typo to the reviewed lesson without AI");
+
 const describe = (await call("POST", "/api/cues/resolve", { entity: "Breyers", type: "brand" })).body;
 console.log(`qloo describe(Breyers) -> ${describe.envelope.status}:`, describe.envelope.error ? `${describe.envelope.error.code}: ${describe.envelope.summary}` : describe.items.slice(0, 3).map((i) => `${i.name} [${i.id}]`));
 ok(describe.envelope.status !== "error", "Qloo describe reachable");

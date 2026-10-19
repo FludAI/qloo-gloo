@@ -19,12 +19,17 @@ CREATE TABLE IF NOT EXISTS first_attempts (
 CREATE TABLE IF NOT EXISTS attempts (
   id INTEGER PRIMARY KEY, sid TEXT NOT NULL, term_id TEXT NOT NULL, prompt_id TEXT NOT NULL, skill TEXT NOT NULL,
   response TEXT, outcome TEXT NOT NULL, hinted INTEGER NOT NULL, independent INTEGER NOT NULL,
-  content_version TEXT, idem_key TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (sid, idem_key));
+  content_version TEXT, review_status TEXT, idem_key TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (sid, idem_key));
 CREATE TABLE IF NOT EXISTS hint_exposures (sid TEXT NOT NULL, prompt_id TEXT NOT NULL, created_at INTEGER NOT NULL, consumed INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS learner_cues (
   id INTEGER PRIMARY KEY, sid TEXT NOT NULL, term_id TEXT NOT NULL, role TEXT NOT NULL, label TEXT NOT NULL,
   connection TEXT NOT NULL, source TEXT NOT NULL, qloo_entity_id TEXT, qloo_type TEXT, recognized INTEGER NOT NULL,
   removed_at INTEGER, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS provisional_terms (
+  id TEXT PRIMARY KEY, sid TEXT NOT NULL, word TEXT NOT NULL, origin TEXT NOT NULL, packet TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS resolutions (
+  id INTEGER PRIMARY KEY, sid TEXT NOT NULL, mode TEXT NOT NULL, input TEXT NOT NULL, resolved TEXT, term_id TEXT,
+  method TEXT, score REAL, decision TEXT, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS provider_calls (
   id INTEGER PRIMARY KEY, sid TEXT, provider TEXT NOT NULL, op TEXT NOT NULL, status TEXT NOT NULL, cache TEXT, duration_ms REAL, created_at INTEGER NOT NULL);
 `);
@@ -34,8 +39,14 @@ export const q = {
   getFirst: db.prepare("SELECT * FROM first_attempts WHERE sid = ? AND term_id = ?"),
   putFirst: db.prepare("INSERT OR IGNORE INTO first_attempts VALUES (?, ?, ?, ?, ?, ?)"),
   attemptByKey: db.prepare("SELECT * FROM attempts WHERE sid = ? AND idem_key = ?"),
-  insertAttempt: db.prepare(`INSERT INTO attempts (sid, term_id, prompt_id, skill, response, outcome, hinted, independent, content_version, idem_key, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+  insertAttempt: db.prepare(`INSERT INTO attempts (sid, term_id, prompt_id, skill, response, outcome, hinted, independent, content_version, review_status, idem_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+  provisionalById: db.prepare("SELECT * FROM provisional_terms WHERE id = ? AND sid = ?"),
+  provisionalByWord: db.prepare("SELECT * FROM provisional_terms WHERE sid = ? AND word = ?"),
+  provisionalFor: db.prepare("SELECT id, word, origin, packet FROM provisional_terms WHERE sid = ? ORDER BY created_at"),
+  addProvisional: db.prepare("INSERT INTO provisional_terms (id, sid, word, origin, packet, created_at) VALUES (?, ?, ?, ?, ?, ?)"),
+  logResolution: db.prepare(`INSERT INTO resolutions (sid, mode, input, resolved, term_id, method, score, decision, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
   attemptsFor: db.prepare("SELECT * FROM attempts WHERE sid = ? AND term_id = ? ORDER BY created_at, id"),
   openHint: db.prepare("SELECT rowid FROM hint_exposures WHERE sid = ? AND prompt_id = ? AND consumed = 0 LIMIT 1"),
   addHint: db.prepare("INSERT INTO hint_exposures (sid, prompt_id, created_at) VALUES (?, ?, ?)"),
@@ -51,13 +62,14 @@ export const q = {
 
 export function exportLearner(sid) {
   const all = (t) => db.prepare(`SELECT * FROM ${t} WHERE sid = ?`).all(sid);
-  return { first_attempts: all("first_attempts"), attempts: all("attempts"), learner_cues: all("learner_cues"), provider_calls: all("provider_calls") };
+  return { first_attempts: all("first_attempts"), attempts: all("attempts"), learner_cues: all("learner_cues"),
+    provisional_terms: all("provisional_terms"), resolutions: all("resolutions"), provider_calls: all("provider_calls") };
 }
 
 export function deleteLearner(sid) {
   db.exec("BEGIN");
   try {
-    for (const t of ["first_attempts", "attempts", "hint_exposures", "learner_cues", "provider_calls", "learners"]) {
+    for (const t of ["first_attempts", "attempts", "hint_exposures", "learner_cues", "provisional_terms", "resolutions", "provider_calls", "learners"]) {
       db.prepare(`DELETE FROM ${t} WHERE sid = ?`).run(sid);
     }
     db.exec("COMMIT");

@@ -1,0 +1,17 @@
+# Decision log
+
+Choices made while building from the Gloo handoff spec (Oct 18, 2026). Product
+rules from the spec stand unless a line here says otherwise.
+
+| # | Decision | Why |
+| --- | --- | --- |
+| 1 | **No spelling confirmation.** Captured words are resolved in the background and the lesson opens directly. A small "Wrong word?" link fixes rare misreads. *Overrides spec §4 "Ask the learner to confirm recognized spelling."* | Learners often can't spell or pronounce the word yet; asking them to confirm it is backwards and slows every capture. (Product owner, Oct 18.) |
+| 2 | **Libraries first, LLM as backup** for word resolution: exact → spelling (Levenshtein) → sound-alike (Double Metaphone) → Hunspell dictionary. Claude is called only when the top two candidates are close or nothing scores well. | Deterministic, free, fast, testable. Thresholds: clear ≥ 0.86 with a 0.08 gap; floor 0.60 (`server/src/resolve/index.mjs`). Every resolution is logged with its method. |
+| 3 | **Spoken capture is the first attempt.** When a learner says the word, the transcript is saved as their first attempt before anything is shown. | Spec requires a first attempt before reference audio. A transcript is not a pronunciation score; pronunciation stays "not assessed." |
+| 4 | **OCR runs on the device** (tesseract.js). Only the recognized words reach the server, which picks the word worth learning. | No photos leave the phone; spec §13 minimal capture. |
+| 5 | **New words get a provisional lesson** drafted by the agent, owned by the learner's session, labeled "Provisional draft" everywhere, with agent-suggested sources marked unverified. Attempts on drafts are stored with `review_status = provisional`. | Spec §4: unknown terms get an explicitly provisional draft, never presented as reviewed. |
+| 6 | **Domain word list** ships in `server/src/resolve/domain-terms.mjs`. | General dictionaries miss terms like cholecystokinin. A fuller list (e.g. NLM MeSH) can be loaded at build time. |
+| 7 | **Stack:** React + Vite + Tailwind 3.4, Express, `node:sqlite`, JavaScript (not TypeScript). | Product owner's stack preference; spec allows reusing the existing stack. No native build steps (Windows-friendly). |
+| 8 | **Schedule interpretation:** review gaps are minimums from the latest qualifying attempt, not offsets from introduction; errors retry after 30 min at the same stage. | Spec §8 proposed defaults, recorded as policy `pilot-1`. |
+| 9 | **Qloo through the event harness** (`qloo mcp`), not direct REST. | The hackathon supports the harness; same endpoints underneath. |
+| 10 | **Hosted demo runs only this repo's code.** | Hackathon rule: the public repo must contain everything the demo needs. |
