@@ -12,3 +12,6 @@ private/
 *[Hh]andoff*.md
 gloo-engine/
 server/data/
+
+# Machine-specific preview config
+.claude/launch.json
