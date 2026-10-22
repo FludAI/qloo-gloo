@@ -47,12 +47,15 @@ const LESSON_TOOL = {
       items: { type: "object", properties: {
         id: { type: "string", description: "short slug" }, label: { type: "string" },
         target: { type: "string" }, look_for: { type: "string" },
+        part: { type: "string", description: "The word part itself, e.g. chole" }, meaning: { type: "string", description: "What the part means, e.g. bile" },
+        sound_like: { type: ["string", "null"], description: "The everyday word the part sounds like, e.g. cola; null for meaning-only roles" },
         pick: { type: "object", description: "A favorite-pick: 3-4 well-known public names (brands, films, bands, books, teams) that ALL carry this part's sound or meaning, so any choice works as the cue",
-          properties: { question: { type: "string", description: "e.g. Which cola is yours?" },
+          properties: { question: { type: "string", description: "Short and spoken, e.g. Say your favorite cola." },
             options: { type: "array", minItems: 3, maxItems: 4, items: { type: "object", properties: {
-              name: { type: "string" }, connection: { type: "string", description: "One sentence: how this name carries the part. Say 'approximate' for sound links." } },
-              required: ["name", "connection"] } } }, required: ["question", "options"] } },
-        required: ["id", "label", "target", "look_for", "pick"] } },
+              name: { type: "string" }, wiki: { type: "string", description: "Exact English Wikipedia article title for its picture" },
+              connection: { type: "string", description: "One sentence: how this name carries the part. Say 'approximate' for sound links." } },
+              required: ["name", "wiki", "connection"] } } }, required: ["question", "options"] } },
+        required: ["id", "label", "part", "meaning", "sound_like", "target", "look_for", "pick"] } },
     distinctions: { type: "array", maxItems: 4, items: { type: "string" }, description: "Easy confusions to keep straight" },
     prompts: { type: "array", minItems: 3, maxItems: 5, items: { type: "object", properties: {
       skill: { type: "string", enum: ["meaning", "operation", "transfer"] },
@@ -91,8 +94,9 @@ export function compilePacket(json) {
 function shape(id, input, d, origin) {
   const components = (d.components ?? []).slice(0, 5).map((c) => ({ part: clip(c.part, 30), meaning: clip(c.meaning, 80), cue: c.cue ? clip(c.cue, 120) : "—" }));
   const roles = (d.roles ?? []).slice(0, 4).map((r) => ({
-    id: slug(r.id), label: clip(r.label, 50), target: clip(r.target, 80), look_for: clip(r.look_for, 120),
-    pick: r.pick?.options?.length ? { question: clip(r.pick.question, 80), options: r.pick.options.slice(0, 4).map((o) => ({ name: clip(o.name, 40), qloo: null, connection: clip(o.connection, 160) })) } : undefined,
+    id: slug(r.id), label: clip(r.label, 50), part: clip(r.part, 30) || clip(r.label, 30), meaning: clip(r.meaning, 60), sound_like: r.sound_like ? clip(r.sound_like, 30) : null,
+    target: clip(r.target, 80), look_for: clip(r.look_for, 120),
+    pick: r.pick?.options?.length ? { question: clip(r.pick.question, 80), options: r.pick.options.slice(0, 4).map((o) => ({ name: clip(o.name, 40), wiki: o.wiki ? clip(o.wiki, 80) : null, say: [], qloo: null, connection: clip(o.connection, 160) })) } : undefined,
   }));
   const title = clip(d.title, 80) || input;
   const nodes = [["term", title, "term"]];

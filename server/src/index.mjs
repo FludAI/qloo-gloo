@@ -18,6 +18,7 @@ import { setVocabulary, resolveLocal, pickFromOcr, normalize } from "./resolve/i
 import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket } from "./drafter.mjs";
 import { sttMode, transcribe, splitWake } from "./speech.mjs";
 import { readWord } from "./reader.mjs";
+import { art } from "./art.mjs";
 import { DOMAIN_TERMS } from "./resolve/domain-terms.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -412,6 +413,17 @@ app.get("/api/progress/:termId", (req, res) => {
   skills.pronunciation = { state: "not assessed", note: "Speech scoring is not configured in this build." };
   res.json({ term_id: t.id, provisional: Boolean(t.provisional), skills, first_attempt: q.getFirst.get(req.sid, t.id) ?? null });
 });
+
+// ---- Pictures for the picks (Wikipedia lead images, cached server-side) ----
+app.get("/api/art", wrap(async (req, res) => {
+  const title = String(req.query.t ?? "").slice(0, 120);
+  if (!title) return res.status(400).end();
+  const a = await art(title);
+  if (!a) return res.status(404).end();
+  res.setHeader("content-type", a.mime);
+  res.setHeader("cache-control", "public, max-age=86400");
+  res.end(Buffer.from(a.bytes));
+}));
 
 // ---- Learner data controls ----
 app.get("/api/diagnostics", (req, res) => res.json({ calls: q.callCounts.all(req.sid) }));

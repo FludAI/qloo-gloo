@@ -110,6 +110,8 @@ test("a favorite pick is saved as the learner's cue for that role", async () => 
   const role = term.roles.find((r) => r.id === "chole");
   assert.equal(role.pick.options.length, 4);
   assert.ok(role.pick.options.every((o) => /cola|kola/i.test(o.name)));
+  assert.ok(role.pick.options.every((o) => o.wiki && Array.isArray(o.say)));
+  assert.equal(role.part, "chole"); assert.equal(role.meaning, "bile"); assert.equal(role.sound_like, "cola");
   const o = role.pick.options[1];
   const list = (await s("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: "chole", label: o.name, connection: o.connection, source: "pick", recognized: true, qloo_entity_type: o.qloo?.type })).body;
   assert.equal(list[0].source, "pick");

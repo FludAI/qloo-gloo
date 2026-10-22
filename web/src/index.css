@@ -37,3 +37,9 @@ body { background: #000; -webkit-tap-highlight-color: transparent; overscroll-be
 
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(217,130,43,0.6); } 100% { box-shadow: 0 0 0 18px rgba(217,130,43,0); } }
 .listening { animation: pulse-ring 1s ease-out infinite; }
+
+/* The stage: a square that reads like a glasses display, scaled to the phone or desktop viewport. */
+.stage { width: 100%; max-width: min(100%, 52vh); aspect-ratio: 1 / 1; margin: 0 auto; }
+.tile-img { position: relative; overflow: hidden; border-radius: 1rem; border: 1px solid rgba(246,241,231,0.25); background: rgba(246,241,231,0.08); transition: transform 120ms; }
+.tile-img:active { transform: scale(0.96); }
+.tile-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px; font-size: 11px; line-height: 1.2; text-align: center; color: #f6f1e7; background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0)); }
