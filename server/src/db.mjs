@@ -39,12 +39,16 @@ if (!db.prepare("PRAGMA table_info(learners)").all().some((c) => c.name === "unl
   db.exec("ALTER TABLE learners ADD COLUMN unlocked INTEGER NOT NULL DEFAULT 0");
 }
 
+if (!db.prepare("PRAGMA table_info(first_attempts)").all().some((c) => c.name === "pieces")) {
+  db.exec("ALTER TABLE first_attempts ADD COLUMN pieces TEXT");
+}
+
 export const q = {
   ensureLearner: db.prepare("INSERT OR IGNORE INTO learners (sid, created_at) VALUES (?, ?)"),
   isUnlocked: db.prepare("SELECT unlocked FROM learners WHERE sid = ?"),
   unlock: db.prepare("UPDATE learners SET unlocked = 1 WHERE sid = ?"),
   getFirst: db.prepare("SELECT * FROM first_attempts WHERE sid = ? AND term_id = ?"),
-  putFirst: db.prepare("INSERT OR IGNORE INTO first_attempts VALUES (?, ?, ?, ?, ?, ?)"),
+  putFirst: db.prepare("INSERT OR IGNORE INTO first_attempts (sid, term_id, response, skipped, content_version, created_at, pieces) VALUES (?, ?, ?, ?, ?, ?, ?)"),
   attemptByKey: db.prepare("SELECT * FROM attempts WHERE sid = ? AND idem_key = ?"),
   insertAttempt: db.prepare(`INSERT INTO attempts (sid, term_id, prompt_id, skill, response, outcome, hinted, independent, content_version, review_status, idem_key, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),

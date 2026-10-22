@@ -6,8 +6,8 @@ import PickCard from "./PickCard.jsx";
 import { speak, hush } from "../lib/speak.js";
 import { CloseIcon } from "./Icons.jsx";
 
-// After capture: one card at a time over the camera. Say it → meaning → one pick per word part → practice → progress.
-// The app speaks each card; the screen carries pictures and one line. No typing anywhere.
+// After capture: one card at a time over the camera. Say it → one picture per sound piece → the whole
+// word from their pictures → practice → progress. Pieces before meaning: the sounds stick first.
 const HOW = { typed: "typed", voice: "heard", ocr: "read from a photo", camera: "read from the camera" };
 
 export default function Flow({ termId, glued, health, guard, onClose, onRegue }) {
@@ -21,7 +21,7 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
   useEffect(() => { setTerm(null); setStep(0); load(); refresh(); api.cues(termId).then(setChosen).catch(() => {}); return hush; }, [termId, load, refresh]);
 
   const pickRoles = useMemo(() => (term?.roles ?? []).filter((r) => r.pick?.options?.length), [term]);
-  const steps = ["meaning", ...pickRoles.map((r) => `pick:${r.id}`), "practice", "progress"];
+  const steps = [...pickRoles.map((r) => `pick:${r.id}`), "together", "practice", "progress"];
   const current = steps[Math.min(step, steps.length - 1)];
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
@@ -32,9 +32,10 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
     if (prev) await api.removeCue(prev.id);
     setChosen(await api.addCue({ term_id: term.id, recognized: true, role: role.id, label: o.name, connection: o.connection, source: "pick", qloo_entity_id: null, qloo_entity_type: o.qloo?.type ?? null }));
   };
+  const close = () => { hush(); onClose(); };
 
   return (
-    <div className="sheet-backdrop" onClick={() => { hush(); onClose(); }}>
+    <div className="sheet-backdrop" onClick={close}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={term?.title ?? "Lesson"}>
         <div className="sheet-handle" />
         <div className="flex items-start justify-between gap-3">
@@ -42,9 +43,9 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
             <h2 className="font-display text-[2rem] leading-none">{term?.title ?? "…"}</h2>
             {term?.pronunciation?.approx && term.pronunciation.approx !== "—" && <p className="mt-1 font-mono text-sm text-paper/60">{term.pronunciation.approx}</p>}
           </div>
-          <button aria-label="Back to camera" className="round !h-10 !w-10" onClick={() => { hush(); onClose(); }}><CloseIcon /></button>
+          <button aria-label="Back to camera" className="round !h-10 !w-10" onClick={close}><CloseIcon /></button>
         </div>
-        {glued && <Captured glued={glued} onRegue={onRegue} onClose={onClose} />}
+        {glued && <Captured glued={glued} onRegue={onRegue} onClose={close} />}
         {term?.provisional && <p className="mt-3 rounded-xl bg-gloo/20 px-3 py-2 text-xs text-paper/80">Provisional draft by the agent, not reviewed.</p>}
         {err && <p className="mt-3 text-sm text-red-300">{err}</p>}
 
@@ -52,11 +53,11 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
 
         {term && !term.locked && (<>
           <Dots steps={steps} at={step} onPick={setStep} />
-          {current === "meaning" && <Meaning term={term} onNext={next} />}
           {current.startsWith("pick:") && (() => {
             const role = pickRoles.find((r) => `pick:${r.id}` === current);
             return <PickCard key={role.id} term={term} role={role} mine={pickFor(role.id)} health={health} guard={guard} onPicked={onPicked} onNext={next} onBack={back} />;
           })()}
+          {current === "together" && <Together term={term} roles={pickRoles} chosen={chosen} onNext={next} onBack={back} />}
           {current === "practice" && (<>
             <Practice term={term} health={health} guard={guard} onAttempt={refresh} onDone={next} />
             <div className="mt-4 flex items-center justify-between"><button className="btn-ghost" onClick={back}>Back</button><button className="btn-ghost" onClick={next}>Done</button></div>
@@ -64,7 +65,7 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
           {current === "progress" && (<>
             <Skills progress={progress} chosen={chosen} term={term} />
             <div className="mt-5 flex gap-2">
-              <button className="btn-light flex-1" onClick={() => { hush(); onClose(); }}>Gloo another word</button>
+              <button className="btn-light flex-1" onClick={close}>Gloo another word</button>
               <button className="btn-ghost" onClick={() => setStep(steps.indexOf("practice"))}>Practice more</button>
             </div>
           </>)}
@@ -94,6 +95,7 @@ function Captured({ glued, onRegue, onClose }) {
 }
 
 // Saved before anything about the term is shown. Say it, or admit you don't know it yet.
+// The server scores the attempt against the sound pieces in the background.
 function FirstAttempt({ term, health, guard, onSaved }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => { speak(term.first_attempt?.question ?? "How would you say it?"); return hush; }, [term.id]);
@@ -107,24 +109,39 @@ function FirstAttempt({ term, health, guard, onSaved }) {
   );
 }
 
-// The word, said aloud, and its parts. Depth is behind one tap.
-function Meaning({ term, onNext }) {
+// The whole word, rebuilt from the pieces they just bonded: their pictures in a row, then one line.
+function Together({ term, roles, chosen, onNext, onBack }) {
   const [more, setMore] = useState(false);
-  useEffect(() => { speak(`${term.title.replace(/\s*\(.*?\)\s*/g, "")}. ${term.summary}`); return hush; }, [term.id]);
+  const parts = roles.map((r) => ({ role: r, pick: chosen.find((c) => c.role === r.id), option: null }))
+    .map((x) => ({ ...x, option: x.pick ? x.role.pick.options.find((o) => o.name === x.pick.label) ?? null : null }));
+  useEffect(() => {
+    const line = roles.map((r) => `${r.part}, ${r.meaning}`).join(". ");
+    speak(`${term.title.replace(/\s*\(.*?\)\s*/g, "")}. ${line}. ${term.summary}`);
+    return hush;
+  }, [term.id]);
   return (
-    <section className="mt-4">
-      <p className="text-xl leading-snug">{term.summary}</p>
-      {term.components?.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {term.components.map((c) => <span key={c.part} className="chip"><span className="font-mono">{c.part}</span><span className="text-paper/50">=</span><span className="font-medium">{c.meaning}</span></span>)}
+    <section className="mt-3">
+      <div className="stage">
+        <div className={`grid h-full gap-2 ${parts.length > 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+          {parts.map(({ role, pick, option }) => (
+            <div key={role.id} className="relative overflow-hidden rounded-2xl border border-paper/20 bg-paper/10">
+              {option?.wiki ? <img src={`/api/art?t=${encodeURIComponent(option.wiki)}`} alt={pick.label} className="h-full w-full object-cover opacity-80" /> : null}
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/35 text-center">
+                <div className="font-display text-3xl leading-none text-gloo">{role.part}</div>
+                <div className="mt-1 text-sm font-medium">{role.meaning}</div>
+                {pick && <div className="mt-1 text-[11px] text-paper/70">{pick.label}</div>}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
-      {term.formula && <div className="mt-4 rounded-2xl bg-paper/10 px-4 py-3 font-mono"><div>{term.formula}</div><div className="mt-1 text-[11px] text-paper/60">{term.rules?.join(" · ")}</div></div>}
-      <button className="mt-3 text-sm text-paper/60 underline" onClick={() => setMore(!more)}>{more ? "Less" : "More"}</button>
+      </div>
+      <p className="mt-3 text-center text-base leading-snug">{term.summary}</p>
+      <button className="mt-2 w-full text-center text-sm text-paper/60 underline" onClick={() => setMore(!more)}>{more ? "Less" : "More"}</button>
       {more && (
         <div className="mt-3 space-y-2 text-sm text-paper/80">
           <p>{term.definition}</p>
           {term.origin && <p className="text-paper/60">{term.origin}</p>}
+          {term.formula && <div className="rounded-2xl bg-paper/10 px-4 py-3 font-mono"><div>{term.formula}</div><div className="mt-1 text-[11px] text-paper/60">{term.rules?.join(" · ")}</div></div>}
           {term.examples && <ul className="space-y-1">{term.examples.map((e) => <li key={e.story} className="flex justify-between gap-3"><span>{e.story}</span><span className="font-mono shrink-0">{e.loss}</span></li>)}</ul>}
           {term.distinctions?.length > 0 && <ul className="list-disc space-y-1 pl-5">{term.distinctions.map((d) => <li key={d}>{d}</li>)}</ul>}
           {term.family && <ul className="space-y-1">{term.family.map(([w, why]) => <li key={w}><span className="font-medium text-paper">{w}</span> <span className="text-paper/60">— {why}</span></li>)}</ul>}
@@ -132,7 +149,7 @@ function Meaning({ term, onNext }) {
           {term.sources?.length > 0 && <p className="text-xs text-paper/50">{term.sources.map((s, i) => <span key={s.url}>{i > 0 && " · "}<a className="underline" href={s.url} target="_blank" rel="noreferrer">{s.label}</a></span>)}</p>}
         </div>
       )}
-      <div className="mt-5 flex justify-end"><button className="btn-light" onClick={onNext}>Next</button></div>
+      <div className="mt-4 flex items-center justify-between"><button className="btn-ghost" onClick={onBack}>Back</button><button className="btn-light" onClick={onNext}>Next</button></div>
     </section>
   );
 }

@@ -19,6 +19,7 @@ import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket } from "./d
 import { sttMode, transcribe, splitWake } from "./speech.mjs";
 import { readWord } from "./reader.mjs";
 import { art } from "./art.mjs";
+import { scorePieces, termPieces } from "./resolve/pieces.mjs";
 import { DOMAIN_TERMS } from "./resolve/domain-terms.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -132,7 +133,7 @@ app.get("/api/terms/:id", (req, res) => {
   const first = q.getFirst.get(req.sid, t.id);
   // The lesson unlocks only after the first attempt is saved or explicitly skipped.
   if (!first) return res.json({ id: t.id, title: t.title, first_attempt: t.first_attempt, locked: true });
-  res.json({ ...publicTerm(t), locked: false, first_attempt_record: first });
+  res.json({ ...publicTerm(t), locked: false, first_attempt_record: { ...first, pieces: first.pieces ? JSON.parse(first.pieces) : null } });
 });
 
 app.post("/api/terms/:id/first-attempt", (req, res) => {
@@ -141,8 +142,10 @@ app.post("/api/terms/:id/first-attempt", (req, res) => {
   const skipped = req.body?.skipped === true;
   const response = skipped ? null : String(req.body?.response ?? "").slice(0, 400);
   if (!skipped && !response.trim()) return res.status(400).json({ error: "response or skipped is required" });
-  q.putFirst.run(req.sid, t.id, response, skipped ? 1 : 0, t.version, Date.now());
-  res.json({ saved: true });
+  // Background signal: which sound pieces the attempt carried. Stored, not shown yet.
+  const pieces = skipped ? null : scorePieces(termPieces(t), response);
+  q.putFirst.run(req.sid, t.id, response, skipped ? 1 : 0, t.version, Date.now(), pieces ? JSON.stringify(pieces) : null);
+  res.json({ saved: true, pieces });
 });
 
 // ---- Spoken input anywhere (first attempt, practice answers): PCM in, transcript out ----
@@ -319,7 +322,8 @@ app.post("/api/glue", wrap(async (req, res) => {
   // Spoken capture of a word doubles as the first attempt, saved before anything is shown.
   if (mode === "voice" && captured === "voice" && !q.getFirst.get(req.sid, termId)) {
     const t = termFor(req.sid, termId);
-    q.putFirst.run(req.sid, termId, `voice capture: "${text}" (speech-to-text transcript, not a pronunciation score)`, 0, t.version, Date.now());
+    q.putFirst.run(req.sid, termId, `voice capture: "${text}" (speech-to-text transcript, not a pronunciation score)`, 0, t.version, Date.now(),
+      JSON.stringify(scorePieces(termPieces(t), text)));
   }
   res.json({ term_id: termId, created, transcript,
     resolution: { input: text, mode: captured, word: best.word, method, score: best.score, decision: local.decision }, alternatives });

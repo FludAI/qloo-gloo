@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { scorePieces } from "../src/resolve/pieces.mjs";
 import assert from "node:assert/strict";
 import { setVocabulary, resolveLocal, pickFromOcr, normalize } from "../src/resolve/index.mjs";
 import { listTerms } from "../src/content/index.mjs";
@@ -50,4 +51,18 @@ test("OCR picks the hard word, not the menu filler", () => {
   const { pick, alternatives } = pickFromOcr("Today: try our cholecystokinin smoothie".split(" "));
   assert.equal(pick, "cholecystokinin");
   assert.ok(alternatives.includes("smoothie"));
+});
+
+test("an attempt is scored piece by piece, by sound", () => {
+  const parts = ["chole", "cysto", "kin", "-in"];
+  const good = scorePieces(parts, "koh lee sis toe KY nin");
+  assert.equal(good.pieces.length, 4);
+  assert.ok(good.pieces[0].said, "chole heard in koh lee");
+  assert.ok(good.pieces[2].said, "kin heard in KY nin");
+  assert.ok(good.said_count >= 3, `said ${good.said_count}`);
+  const exact = scorePieces(parts, "cholecystokinin");
+  assert.equal(exact.said_count, 4);
+  const miss = scorePieces(parts, "the hormone for digestion");
+  assert.ok(miss.said_count <= 1, `miss said ${miss.said_count}`);
+  assert.ok(miss.overall < good.overall);
 });

@@ -78,6 +78,15 @@ test("1: lesson stays locked until the first attempt is saved or skipped", async
   assert.equal((await s("GET", "/api/terms/brier-score")).body.locked, false);
 });
 
+test("a spoken first attempt is scored against the pieces in the background", async () => {
+  const s = session();
+  const { body } = await s("POST", "/api/terms/cholecystokinin/first-attempt", { response: "koh lee sis toe KY nin" });
+  assert.equal(body.pieces.pieces.length, 4);
+  assert.ok(body.pieces.said_count >= 3);
+  const term = (await s("GET", "/api/terms/cholecystokinin")).body;
+  assert.equal(term.first_attempt_record.pieces.said_count, body.pieces.said_count);
+});
+
 test("agent: Qloo-returned IDs are kept, invented IDs are stripped, unknown roles dropped", async () => {
   const s = session();
   await s("POST", "/api/terms/brier-score/first-attempt", { response: "forecast accuracy" });
