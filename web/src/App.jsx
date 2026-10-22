@@ -4,10 +4,12 @@ import Camera from "./components/Camera.jsx";
 import Flow from "./components/Flow.jsx";
 import Passcode from "./components/Passcode.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
+import { sfx, warmAudio } from "./lib/sfx.js";
 import { CameraIcon, CloseIcon, InfoIcon, LockIcon, MicIcon } from "./components/Icons.jsx";
 
 // Gloo is a camera. Camera and mic on (phone or glasses), or you don't proceed. No typing anywhere.
-// Frame a word and tap, or hold the mic and say it. The lesson rises as cards over the viewfinder.
+// Frame a word and tap, or hold the mic and say it. The scan sweeps the frame, drops a tick per
+// piece it finds, then the lesson rises as cards over the viewfinder.
 export default function App() {
   const cam = useRef(null);
   const [health, setHealth] = useState(null);
@@ -15,6 +17,7 @@ export default function App() {
   const [camState, setCamState] = useState("idle");
   const [micGranted, setMicGranted] = useState(false);
   const [busy, setBusy] = useState("");
+  const [scan, setScan] = useState(null);
   const [toast, setToast] = useState("");
   const [sheet, setSheet] = useState(null); // { termId, glued }
   const [info, setInfo] = useState(false);
@@ -40,10 +43,19 @@ export default function App() {
     }
   }, [say]);
 
-  const onGlued = async (result) => { await loadTerms(); setSheet({ termId: result.term_id, glued: result }); };
+  // Scan: the sweep runs while the server reads; when the word is known, one tick per piece drops
+  // under the frame, the frame locks, and the lesson opens.
+  const onGlued = async (result) => {
+    await loadTerms();
+    let pieces = 0;
+    try { pieces = (await api.term(result.term_id)).pieces?.length ?? 0; } catch { /* lesson still opens */ }
+    if (pieces) { setScan({ pieces }); sfx("lock", 120 + pieces * 150 + 260); await new Promise((r) => setTimeout(r, 120 + pieces * 150 + 520)); }
+    setScan(null);
+    setSheet({ termId: result.term_id, glued: result });
+  };
   const glue = (body, label) => guard(async () => {
-    setBusy(label);
-    try { await onGlued(await api.glue(body)); } finally { setBusy(""); }
+    setBusy(label); if (body.mode === "camera" || body.image) setScan("sweep");
+    try { await onGlued(await api.glue(body)); } catch (e) { setScan(null); throw e; } finally { setBusy(""); }
   });
   const frame = () => cam.current?.capture() ?? null;
   const glueFrame = () => {
@@ -57,14 +69,14 @@ export default function App() {
     onText: ({ transcript }) => glue({ mode: "voice", text: transcript, ...(frame() ?? {}) }, "Listening…"),
   });
 
-  const openCamera = () => cam.current?.start();
+  const openCamera = () => { warmAudio(); cam.current?.start(); };
   const onCamState = (s, extra) => { setCamState(s); if (s === "live") setMicGranted(Boolean(extra?.mic)); };
   const live = camState === "live";
   const locked = health?.gated && !health?.unlocked;
 
   return (
     <div className="relative h-full w-full select-none overflow-hidden bg-black text-paper">
-      <Camera ref={cam} onState={onCamState}>
+      <Camera ref={cam} onState={onCamState} scan={scan}>
         <div className="safe-top absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4">
           <span className="font-display text-2xl tracking-tight">gloo</span>
           <div className="flex items-center gap-2">
@@ -73,7 +85,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* The gate. Camera and mic are the interface; there is no page behind it. */}
         {(camState === "idle" || camState === "starting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
             <h1 className="font-display text-5xl leading-[1.02]">Gloo works<br />through your <em className="text-gloo">camera.</em></h1>
@@ -94,7 +105,7 @@ export default function App() {
           <p className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-paper/80" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 2.2rem)" }}>
             {busy || (talk.listening ? "Listening… release when done" : "Frame the word and tap, or hold the mic and say it.")}
           </p>
-          {terms.length > 0 && (
+          {terms.length > 0 && !sheet && (
             <div className="absolute inset-x-0 z-10 flex gap-2 overflow-x-auto px-4 pb-1" style={{ bottom: "calc(8.5rem + env(safe-area-inset-bottom))", scrollbarWidth: "none" }}>
               {terms.map((t) => (
                 <button key={t.id} className="shrink-0 rounded-full bg-black/50 px-3 py-1.5 text-sm text-paper backdrop-blur" onClick={() => setSheet({ termId: t.id, glued: null })}>
@@ -115,7 +126,6 @@ export default function App() {
         </>)}
 
         {(toast || (talk.error && !busy)) && <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6" style={{ bottom: "calc(12rem + env(safe-area-inset-bottom))" }}><span className="toast">{toast || talk.error}</span></div>}
-        {busy && <div className="pointer-events-none absolute inset-0 z-10 bg-black/20" />}
       </Camera>
 
       {sheet && <Flow termId={sheet.termId} glued={sheet.glued} health={health} guard={guard}
@@ -140,7 +150,7 @@ function InfoSheet({ health, micGranted, onClose, onPasscode }) {
       <div className="sheet max-h-[75vh]" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-handle" />
         <div className="flex items-center justify-between"><h2 className="font-display text-3xl">Gloo × Qloo</h2><button aria-label="Close" className="round !h-10 !w-10" onClick={onClose}><CloseIcon /></button></div>
-        <p className="mt-2 text-sm text-paper/80">Gloo pulls the meaning already inside a hard word and hooks each part to things you already like. Your picks are the hooks. Practice hides them.</p>
+        <p className="mt-2 text-sm text-paper/80">Gloo pulls the sound pieces out of a hard word and hooks each one to something you already like. Your picks are the hooks. Practice hides them.</p>
         {health && !health.offline && (
           <ul className="mt-4 space-y-1.5 text-sm">
             {row("Camera reading", health.camera === "live", health.camera)}
@@ -152,7 +162,7 @@ function InfoSheet({ health, micGranted, onClose, onPasscode }) {
           </ul>
         )}
         {health?.gated && !health?.unlocked && <button className="btn-light mt-3" onClick={onPasscode}>Enter passcode</button>}
-        <p className="mt-4 text-xs text-paper/50">Only the framed crop and a few seconds of audio go to the server; nothing is stored. Not in this build: pronunciation scoring, glasses input, rewards.</p>
+        <p className="mt-4 text-xs text-paper/50">Only the framed crop and a few seconds of audio go to the server; nothing is stored. Motion studies: <a className="underline" href="/motion/studies.html">/motion/studies.html</a>.</p>
         <p className="mt-3 flex gap-3 text-xs text-paper/60">
           <button className="underline" onClick={download}>Export my data</button>
           <button className="underline" onClick={wipe}>Delete my data</button>

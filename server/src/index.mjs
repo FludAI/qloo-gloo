@@ -132,7 +132,8 @@ app.get("/api/terms/:id", (req, res) => {
   if (!t) return res.status(404).json({ error: "unknown term" });
   const first = q.getFirst.get(req.sid, t.id);
   // The lesson unlocks only after the first attempt is saved or explicitly skipped.
-  if (!first) return res.json({ id: t.id, title: t.title, first_attempt: t.first_attempt, locked: true });
+  if (!first) return res.json({ id: t.id, title: t.title, first_attempt: t.first_attempt, locked: true, pronunciation: t.pronunciation,
+    pieces: (t.roles ?? []).filter((r) => r.part).map((r) => ({ part: r.part, say: r.say ?? null })) });
   res.json({ ...publicTerm(t), locked: false, first_attempt_record: { ...first, pieces: first.pieces ? JSON.parse(first.pieces) : null } });
 });
 

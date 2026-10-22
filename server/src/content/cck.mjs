@@ -39,28 +39,28 @@ export const cck = {
     { label: "NCBI: cytokinesis", url: "https://www.ncbi.nlm.nih.gov/books/NBK26831/" },
   ],
   roles: [
-    { id: "chole", label: "chole = bile", part: "chole", meaning: "bile", sound_like: "cola", target: "the sound “koh-lih” / chole", look_for: "something that sounds like “cola / chole”",
+    { id: "chole", label: "chole = bile", part: "chole", say: "koh-lee", meaning: "bile", sound_like: "cola", target: "the sound “koh-lih” / chole", look_for: "something that sounds like “cola / chole”",
       pick: { question: "Say your favorite cola.", options: [
         { name: "Coca-Cola", wiki: "Coca-Cola", say: ["coke", "coca cola", "coca"], qloo: { entity: "Coca-Cola", type: "brand" }, connection: "Coca-Cola ≈ chole (approximate sound). Chole means bile." },
         { name: "Pepsi-Cola", wiki: "Pepsi", say: ["pepsi"], qloo: { entity: "Pepsi", type: "brand" }, connection: "Pepsi-Cola ≈ chole (approximate sound). Chole means bile." },
         { name: "RC Cola", wiki: "RC Cola", say: ["rc", "royal crown", "arc"], qloo: { entity: "RC Cola", type: "brand" }, connection: "RC Cola ≈ chole (approximate sound). Chole means bile." },
         { name: "Inca Kola", wiki: "Inca Kola", say: ["inca", "inka"], qloo: { entity: "Inca Kola", type: "brand" }, connection: "Inca Kola ≈ chole (approximate sound). Chole means bile." },
       ] } },
-    { id: "cysto", label: "cysto = bladder or sac", part: "cysto", meaning: "bladder or sac", sound_like: "sister", target: "the sound “sis” / cysto", look_for: "something that sounds like “sister / sis”",
+    { id: "cysto", label: "cysto = bladder or sac", part: "cysto", say: "sis-toh", meaning: "bladder or sac", sound_like: "sister", target: "the sound “sis” / cysto", look_for: "something that sounds like “sister / sis”",
       pick: { question: "Say your favorite Sister.", options: [
         { name: "Sister Act", wiki: "Sister Act", say: ["sister act", "act"], qloo: { entity: "Sister Act", type: "movie" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
         { name: "Twisted Sister", wiki: "Twisted Sister", say: ["twisted"], qloo: { entity: "Twisted Sister", type: "artist" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
         { name: "Sister Sledge", wiki: "Sister Sledge", say: ["sledge"], qloo: { entity: "Sister Sledge", type: "artist" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
         { name: "Sisters (2015)", wiki: "Sisters (2015 film)", say: ["sisters", "the movie", "tina fey", "amy poehler"], qloo: { entity: "Sisters", type: "movie" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
       ] } },
-    { id: "kin", label: "kin = movement", part: "kin", meaning: "movement", sound_like: null, target: "movement", look_for: "something you picture moving",
+    { id: "kin", label: "kin = movement", part: "kin", say: "kin", meaning: "movement", sound_like: null, target: "movement", look_for: "something you picture moving",
       pick: { question: "Say the one you picture moving.", options: [
         { name: "Formula 1", wiki: "Formula One", say: ["formula one", "f1", "formula"], qloo: { entity: "Formula 1", type: "brand" }, connection: "Formula 1 is movement. Kin / kine means movement." },
         { name: "Fast & Furious", wiki: "Fast & Furious 6", say: ["fast and furious", "fast", "furious"], qloo: { entity: "Fast & Furious", type: "movie" }, connection: "Fast & Furious is movement. Kin / kine means movement." },
         { name: "Tour de France", wiki: "Tour de France", say: ["tour", "le tour"], qloo: { entity: "Tour de France", type: "brand" }, connection: "The Tour de France is movement. Kin / kine means movement." },
         { name: "Tesla", wiki: "Tesla, Inc.", say: ["tesla"], qloo: { entity: "Tesla", type: "brand" }, connection: "A Tesla is movement. Kin / kine means movement." },
       ] } },
-    { id: "in", label: "-in ending", part: "-in", meaning: "the substance ending", sound_like: "-in", target: "the ending sound “-in”", look_for: "something ending in “-in”",
+    { id: "in", label: "-in ending", part: "-in", say: "in", meaning: "the substance ending", sound_like: "-in", target: "the ending sound “-in”", look_for: "something ending in “-in”",
       pick: { question: "Say the one that ends in “-in”.", options: [
         { name: "Aspirin", wiki: "Aspirin", say: ["aspirin", "bayer"], qloo: { entity: "Bayer", type: "brand" }, connection: "Aspir-in supplies the ending sound -in of cholecystokin-in, and it is a substance too. Ending sound only, not the definition." },
         { name: "Aladdin", wiki: "Aladdin (1992 Disney film)", say: ["aladdin", "aladin"], qloo: { entity: "Aladdin", type: "movie" }, connection: "Aladd-in supplies the ending sound -in of cholecystokin-in. Ending sound only, not the definition." },

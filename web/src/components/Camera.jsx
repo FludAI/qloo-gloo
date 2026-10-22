@@ -1,10 +1,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Rail } from "./Motion.jsx";
 
 // Full-screen rear camera with a reticle. capture() returns a JPEG of the framed region only
 // (plus a little margin), so the server reads one word and never sees the whole scene.
+// scan: null | "sweep" (reading) | { pieces: n } (found: one tick per piece drops under the frame)
 const VIDEO = { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } };
 
-const Camera = forwardRef(function Camera({ onState, children }, ref) {
+const Camera = forwardRef(function Camera({ onState, scan = null, children }, ref) {
   const videoRef = useRef(null);
   const boxRef = useRef(null);
   const streamRef = useRef(null);
@@ -57,14 +59,17 @@ const Camera = forwardRef(function Camera({ onState, children }, ref) {
 
   useImperativeHandle(ref, () => ({ start, capture, state }), [state]);
 
+  const found = scan && typeof scan === "object" ? scan.pieces : 0;
   return (
     <div className="absolute inset-0 overflow-hidden bg-black">
       <video ref={videoRef} playsInline muted autoPlay className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${state === "live" ? "opacity-100" : "opacity-0"}`} />
       {state === "live" && <div className="pointer-events-none absolute inset-0 bg-black/25" />}
       {state === "live" && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center" style={{ paddingBottom: "22vh" }}>
-          <div ref={boxRef} className="reticle" aria-hidden>
+          <div ref={boxRef} className={`reticle ${found ? "reticle-lock" : ""}`} aria-hidden>
             <span className="corner tl" /><span className="corner tr" /><span className="corner bl" /><span className="corner br" />
+            {scan === "sweep" && <div className="sweep" />}
+            {found > 0 && <div className="absolute inset-x-3 top-full mt-3"><Rail count={found} animate /></div>}
           </div>
         </div>
       )}
@@ -74,21 +79,3 @@ const Camera = forwardRef(function Camera({ onState, children }, ref) {
 });
 
 export default Camera;
-
-// Photo fallback when the live camera is refused: downscale on the device, send one JPEG.
-export function fileToJpeg(file, max = 1280) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      resolve({ image: c.toDataURL("image/jpeg", 0.85).split(",")[1], mime: "image/jpeg" });
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't open that photo.")); };
-    img.src = url;
-  });
-}

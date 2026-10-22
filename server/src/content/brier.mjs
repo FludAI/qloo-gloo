@@ -36,27 +36,27 @@ export const brier = {
     { label: "scikit-learn brier_score_loss", url: "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.brier_score_loss.html" },
   ],
   roles: [
-    { id: "sound", label: "Name sound", part: "Brier", meaning: "the name of the score", sound_like: "Breyers", target: "Brier", look_for: "something that sounds like “Brier”",
+    { id: "sound", label: "Name sound", part: "Brier", say: "bry-er", meaning: "the name of the score", sound_like: "Breyers", target: "Brier", look_for: "something that sounds like “Brier”",
       pick: { question: "Say the one that sounds like “Brier”.", options: [
         { name: "Breyers", wiki: "Breyers", say: ["breyers", "briars", "breyer"], qloo: { entity: "Breyers", type: "brand" }, connection: "Breyers ≈ Brier (approximate sound; Breyers has an extra ending sound)." },
         { name: "Briar Rose", wiki: "Sleeping Beauty (1959 film)", say: ["briar rose", "briar", "sleeping beauty"], qloo: { entity: "Sleeping Beauty", type: "movie" }, connection: "Briar ≈ Brier (approximate sound). Sleeping Beauty's other name." },
         { name: "Brie", wiki: "Brie", say: ["brie", "bree"], qloo: null, connection: "Brie ≈ Bri-er (approximate sound). The cheese, not the score." },
       ] } },
-    { id: "loss_direction", label: "Which way is better", part: "lower", meaning: "lower is better; 0 is perfect", sound_like: null, target: "lower loss, toward zero", look_for: "something that means colder / lower / less is better",
+    { id: "loss_direction", label: "Which way is better", part: "lower", say: "lower", meaning: "lower is better; 0 is perfect", sound_like: null, target: "lower loss, toward zero", look_for: "something that means colder / lower / less is better",
       pick: { question: "Say your favorite cold treat.", options: [
         { name: "Ice cream", wiki: "Ice cream", say: ["ice cream", "gelato"], qloo: null, connection: "Ice cream: colder is lower is better. Lower Brier wins." },
         { name: "Slurpee", wiki: "Slurpee", say: ["slurpee", "slurpy", "icee"], qloo: { entity: "7-Eleven", type: "brand" }, connection: "Slurpee: colder is lower is better. Lower Brier wins." },
         { name: "Frappuccino", wiki: "Frappuccino", say: ["frappuccino", "frap", "frappe", "starbucks"], qloo: { entity: "Starbucks", type: "brand" }, connection: "Frappuccino: colder is lower is better. Lower Brier wins." },
         { name: "Snow cone", wiki: "Snow cone", say: ["snow cone", "snowcone", "shaved ice"], qloo: null, connection: "Snow cone: colder is lower is better. Lower Brier wins." },
       ] } },
-    { id: "endpoints", label: "Zero and one", part: "0 to 1", meaning: "forecasts run 0 to 1; outcomes are 0 or 1", sound_like: "one", target: "probabilities run 0–1; outcomes are 0 or 1", look_for: "something built around 0 and 1",
+    { id: "endpoints", label: "Zero and one", part: "0 to 1", say: "zero to one", meaning: "forecasts run 0 to 1; outcomes are 0 or 1", sound_like: "one", target: "probabilities run 0–1; outcomes are 0 or 1", look_for: "something built around 0 and 1",
       pick: { question: "Say your favorite “one”.", options: [
         { name: "Zero to One", wiki: "Zero to One", say: ["zero to one", "thiel"], qloo: { entity: "Zero to One", type: "book" }, connection: "Zero to One: probabilities run 0 to 1, outcomes are 0 or 1. The title only." },
         { name: "Formula 1", wiki: "Formula One", say: ["formula one", "f1", "formula"], qloo: { entity: "Formula 1", type: "brand" }, connection: "Formula 1: the 1 is the top of the range. Probabilities run 0 to 1, outcomes are 0 or 1." },
         { name: "Xbox One", wiki: "Xbox One", say: ["xbox", "xbox one"], qloo: { entity: "Xbox", type: "brand" }, connection: "Xbox One: the 1 is the top of the range. Probabilities run 0 to 1, outcomes are 0 or 1." },
         { name: "Air Force 1", wiki: "Nike Air Force 1", say: ["air force", "air force one", "nike"], qloo: { entity: "Nike", type: "brand" }, connection: "Air Force 1: the 1 is the top of the range. Probabilities run 0 to 1, outcomes are 0 or 1." },
       ] } },
-    { id: "outcome", label: "Score the outcome", part: "score", meaning: "what actually happened: 1 or 0", sound_like: null, target: "record what actually happened", look_for: "a resolved event you'd check the result of",
+    { id: "outcome", label: "Score the outcome", part: "score", say: "score", meaning: "what actually happened: 1 or 0", sound_like: null, target: "record what actually happened", look_for: "a resolved event you'd check the result of",
       pick: { question: "Say whose scores you check.", options: [
         { name: "NFL", wiki: "National Football League", say: ["nfl", "football"], qloo: { entity: "NFL", type: "brand" }, connection: "An NFL score records what actually happened: 1 if the defined event occurred, 0 if not." },
         { name: "Premier League", wiki: "Premier League", say: ["premier league", "premier", "soccer", "epl"], qloo: { entity: "Premier League", type: "brand" }, connection: "A Premier League score records what actually happened: 1 if the defined event occurred, 0 if not." },

@@ -49,6 +49,7 @@ const LESSON_TOOL = {
         target: { type: "string" }, look_for: { type: "string" },
         part: { type: "string", description: "The word part itself, e.g. chole" }, meaning: { type: "string", description: "What the part means, e.g. bile" },
         sound_like: { type: ["string", "null"], description: "The everyday word the part sounds like, e.g. cola; null for meaning-only roles" },
+        say: { type: "string", description: "How to say the part, as a respelling a speech engine reads correctly, e.g. koh-lee" },
         pick: { type: "object", description: "A favorite-pick: 3-4 well-known public names (brands, films, bands, books, teams) that ALL carry this part's sound or meaning, so any choice works as the cue",
           properties: { question: { type: "string", description: "Short and spoken, e.g. Say your favorite cola." },
             options: { type: "array", minItems: 3, maxItems: 4, items: { type: "object", properties: {
@@ -73,6 +74,12 @@ const LESSON_TOOL = {
   }, required: ["title", "summary", "definition", "roles", "prompts"] },
 };
 
+// The model occasionally returns an array field as a JSON string; read it either way.
+const arr = (x) => {
+  if (Array.isArray(x)) return x;
+  if (typeof x === "string") { try { const v = JSON.parse(x); return Array.isArray(v) ? v : []; } catch { return []; } }
+  return [];
+};
 const esc = (s) => String(s).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const anyOf = (words) => new RegExp(words.filter(Boolean).map(esc).join("|"));
 const clip = (s, n) => String(s ?? "").slice(0, n);
@@ -80,23 +87,24 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
 
 // Turn model JSON into a packet with compiled rubrics (stored as JSON, compiled on load).
 export function compilePacket(json) {
-  const prompts = (json.prompts ?? []).map((p) => ({
+  const prompts = arr(json.prompts).map((p) => ({
     ...p,
     rubric: p.type === "text" ? {
-      all: (p.accept_all ?? []).filter((g) => g?.length).map(anyOf),
-      any: (p.accept_any ?? []).length ? [anyOf(p.accept_any)] : [],
+      all: arr(p.accept_all).filter((g) => g?.length).map(anyOf),
+      any: arr(p.accept_any).length ? [anyOf(arr(p.accept_any))] : [],
     } : undefined,
-    misconceptions: (p.misconceptions ?? []).map((m) => [anyOf(m.keywords ?? []), m.feedback]),
+    misconceptions: arr(p.misconceptions).map((m) => [anyOf(arr(m.keywords)), m.feedback]),
   }));
   return { ...json, prompts };
 }
 
 function shape(id, input, d, origin) {
-  const components = (d.components ?? []).slice(0, 5).map((c) => ({ part: clip(c.part, 30), meaning: clip(c.meaning, 80), cue: c.cue ? clip(c.cue, 120) : "—" }));
-  const roles = (d.roles ?? []).slice(0, 4).map((r) => ({
+  const components = arr(d.components).slice(0, 5).map((c) => ({ part: clip(c.part, 30), meaning: clip(c.meaning, 80), cue: c.cue ? clip(c.cue, 120) : "—" }));
+  const roles = arr(d.roles).slice(0, 4).map((r) => ({
     id: slug(r.id), label: clip(r.label, 50), part: clip(r.part, 30) || clip(r.label, 30), meaning: clip(r.meaning, 60), sound_like: r.sound_like ? clip(r.sound_like, 30) : null,
+    say: r.say ? clip(r.say, 40) : null,
     target: clip(r.target, 80), look_for: clip(r.look_for, 120),
-    pick: r.pick?.options?.length ? { question: clip(r.pick.question, 80), options: r.pick.options.slice(0, 4).map((o) => ({ name: clip(o.name, 40), wiki: o.wiki ? clip(o.wiki, 80) : null, say: [], qloo: null, connection: clip(o.connection, 160) })) } : undefined,
+    pick: arr(r.pick?.options).length ? { question: clip(r.pick.question, 80), options: arr(r.pick.options).slice(0, 4).map((o) => ({ name: clip(o.name, 40), wiki: o.wiki ? clip(o.wiki, 80) : null, say: [], qloo: null, connection: clip(o.connection, 160) })) } : undefined,
   }));
   const title = clip(d.title, 80) || input;
   const nodes = [["term", title, "term"]];
@@ -112,11 +120,11 @@ function shape(id, input, d, origin) {
     pronunciation: { approx: clip(d.pronunciation_approx, 60) || "—", note: "Approximate. Not reviewed." },
     summary: clip(d.summary, 400), definition: clip(d.definition, 400),
     components: components.length ? components : undefined,
-    distinctions: (d.distinctions ?? []).slice(0, 4).map((x) => clip(x, 240)),
-    sources: (d.sources ?? []).slice(0, 3).filter((s) => /^https?:\/\//.test(s.url)).map((s) => ({ label: clip(s.label, 100), url: clip(s.url, 300) })),
+    distinctions: arr(d.distinctions).slice(0, 4).map((x) => clip(x, 240)),
+    sources: arr(d.sources).slice(0, 3).filter((s) => /^https?:\/\//.test(s.url)).map((s) => ({ label: clip(s.label, 100), url: clip(s.url, 300) })),
     roles, editorial_cues: [], graph: { nodes, edges },
     first_attempt: { question: "How would you say it, or what do you think it means? A guess is fine." },
-    prompts: (d.prompts ?? []).slice(0, 5).map((p, i) => ({
+    prompts: arr(d.prompts).slice(0, 5).map((p, i) => ({
       id: `${id}-q${i + 1}`, skill: p.skill, type: p.type, question: clip(p.question, 300), hint: p.hint ? clip(p.hint, 200) : undefined,
       accept_all: p.accept_all, accept_any: p.accept_any, expected: p.expected, answer: clip(p.answer, 300), misconceptions: p.misconceptions,
     })),
@@ -129,7 +137,8 @@ export async function draftLesson(id, word) {
 Be accurate. If the term has meaningful parts, list them. Sound cues are approximate memory aids, never etymology.
 Each role needs a favorite-pick: a question like "Which cola is yours?" and 3-4 well-known public names that all carry that part's sound or meaning, so whichever one the learner picks works as the cue.
 Practice prompts: short, answerable, deterministic. Text prompts need keyword rubrics (lowercase stems that a correct answer must contain). Number prompts need an exact expected value.
-Only cite sources you are confident exist (major dictionaries, NIH/NCBI, Wikipedia). It is fine to cite none.`,
+Only cite sources you are confident exist (major dictionaries, NIH/NCBI, Wikipedia). It is fine to cite none.
+Every array field (components, roles, pick options, prompts, sources) must be a JSON array, never a string containing JSON.`,
     `Draft a provisional lesson for the term: "${word}"`,
     LESSON_TOOL,
   );
