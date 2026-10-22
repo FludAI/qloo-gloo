@@ -52,8 +52,8 @@ Ask, three options to try; pick one:
 - **C. Pulse count.** The reticle pulses once per piece found, with a tick lighting up on a
   small rail below. Simplest; least information about where the pieces are.
 
-Recommendation: A for the phone (we have the frame and the word position), C for glasses
-(no frame on the display, only the word as text).
+Decided (owner, 2026-10-22): **A on the phone** (we have the frame and the word position),
+**C on glasses** (no frame on the display, only the word as text). B is not pursued.
 
 ### 2. Stickiness: does this word stick on its own?
 
@@ -128,7 +128,7 @@ bars. Reuse the stickiness meter style for consistency.
    filling, filled-hot, filled-cool, resting.
 3. A short sound kit: tick, lock-in, ring-close chime, miss, lift-off. Mono, under 400 ms
    each.
-4. For the scan, a recommendation between A, B and C with a reason.
+4. The scan as decided: A on the phone, C on glasses.
 
 ## Open questions for the owner
 
