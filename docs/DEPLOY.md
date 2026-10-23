@@ -44,6 +44,17 @@ Spoken capture calls Speech-to-Text with the service's runtime account; no key
 is involved. The account needs the API enabled (above) and a role that includes
 `speech.recognize` (the default compute account's Editor role does).
 
+## Custom domain
+
+`gloo.news` is mapped to the service with a Cloud Run domain mapping (the domain is
+verified in Search Console under the deploying account; DNS at Namecheap carries the
+four A and four AAAA records the mapping hands out). To map another host:
+
+```bash
+gcloud beta run domain-mappings create --service qloo-gloo --domain app.gloo.news --region $REGION
+gcloud beta run domain-mappings describe --domain app.gloo.news --region $REGION --format='value(status.resourceRecords)'
+```
+
 ## Why one warm instance
 
 SQLite lives on the instance's `/tmp`, which Cloud Run keeps in memory and

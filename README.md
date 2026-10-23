@@ -5,7 +5,7 @@ Built for the Qloo Agentic Hackathon as an open extension of [Gloo](https://gloo
 
 > Patent pending. See [PATENTS.md](PATENTS.md).
 
-**Live demo:** https://qloo-gloo-667990366434.us-central1.run.app
+**Live demo:** https://gloo.news (also https://qloo-gloo-667990366434.us-central1.run.app)
 
 ## What it does
 

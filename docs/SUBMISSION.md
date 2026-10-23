@@ -4,7 +4,7 @@ Required: live demo URL · public repo URL · text description · external hosti
 · open-source license visible in the repo's About panel.
 
 ## Links
-- Demo: https://qloo-gloo-667990366434.us-central1.run.app
+- Demo: https://gloo.news
 - Repo: https://github.com/FludAI/qloo-gloo (private until the patent checklist clears; flip to public before submitting)
 - Passcode for camera, voice and the agent: _[paste DEMO_PASSCODE here before submitting]_ (the two reviewed lessons work without it)
 
