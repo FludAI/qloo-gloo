@@ -15,7 +15,7 @@ export const store = createLessonStore({ media, db, seeds: SEEDS });
 
 // A stored document -> the runtime packet the routes use (compiled rubrics, review block, draft label).
 export function hydrate(doc) {
-  const { history, review_status, reviewed_at, edited_by, edited_at, ...packet } = doc;
+  const { history, pending, review_status, reviewed_at, edited_by, edited_at, ...packet } = doc; // proposals never reach learners
   const t = compilePacket(packet);
   t.review = { status: review_status, reviewed_at: reviewed_at ?? null };
   if (review_status === "provisional") t.provisional = true;

@@ -202,6 +202,8 @@ function Editor({ token, id, onBack }) {
         </Section>
       ))}
 
+      <Proposals token={token} id={id} pending={orig.pending} dirty={dirty} instruction={instruction} onChange={(d) => { setOrig(d); setDraft(structuredClone(d)); }} />
+
       {orig.history?.length > 0 && (
         <Section title="Versions">
           <ul className="space-y-1 font-mono text-xs text-paper/60">
@@ -251,6 +253,56 @@ function Field({ label, path, value, onChange, ask, multiline, mono, small }) {
         </span>
       )}
     </label>
+  );
+}
+
+// The reviewer's proposals for the whole lesson. "Review this lesson" asks the server (deterministic checks, then the
+// model); proposals wait on the lesson until Accept selected (one new version) or Discard. Flags without a replacement
+// have no checkbox: they are for the owner to fix by hand.
+const show = (v) => (v == null ? "—" : typeof v === "string" ? v : JSON.stringify(v));
+function Proposals({ token, id, pending, dirty, instruction, onChange }) {
+  const [picked, setPicked] = useState(() => new Set());
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const proposals = pending?.proposals ?? [];
+  const applicable = proposals.filter((p) => p.after != null);
+  const run = async (label, method, path, body) => {
+    setBusy(label); setErr("");
+    try { onChange(await call(token, method, path, body)); setPicked(new Set()); } catch (e) { setErr(e.problems?.length ? `${e.message}: ${e.problems.join("; ")}` : e.message); }
+    finally { setBusy(""); }
+  };
+  const toggle = (path) => setPicked((s) => { const n = new Set(s); n.has(path) ? n.delete(path) : n.add(path); return n; });
+  return (
+    <Section title="Review" sub={pending ? `${proposals.length} proposal${proposals.length === 1 ? "" : "s"} · ${pending.by}, ${when(pending.created_at)}` : undefined}>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="btn-light" disabled={Boolean(busy)} onClick={() => run("review", "POST", `/api/admin/lessons/${id}/review`, instruction.trim() ? { instruction: instruction.trim() } : {})}>{busy === "review" ? "Reviewing…" : "Review this lesson"}</button>
+        {proposals.length > 0 && <>
+          <button type="button" className="btn-light" disabled={Boolean(busy) || dirty || !picked.size} title={dirty ? "Save or discard your own edits first" : ""} onClick={() => run("accept", "POST", `/api/admin/lessons/${id}/proposals/accept`, { paths: [...picked] })}>{busy === "accept" ? "Applying…" : `Accept selected (${picked.size})`}</button>
+          <button type="button" className="btn-ghost" disabled={Boolean(busy)} onClick={() => setPicked(new Set(applicable.map((p) => p.path)))}>Select all</button>
+          <button type="button" className="btn-ghost" disabled={Boolean(busy)} onClick={() => run("discard", "POST", `/api/admin/lessons/${id}/proposals/discard`)}>{busy === "discard" ? "…" : "Discard"}</button>
+        </>}
+      </div>
+      {err && <p className="text-sm text-red-300">{err}</p>}
+      {pending?.notes?.length > 0 && <ul className="list-disc pl-5 text-sm text-paper/70">{pending.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+      {pending && !proposals.length && <p className="text-sm text-paper/60">Nothing to change.</p>}
+      <ul className="space-y-2">
+        {proposals.map((p) => (
+          <li key={p.path} className={`rounded-xl border p-3 text-sm ${p.severity === "fix" ? "border-red-300/50" : "border-paper/15"}`}>
+            <label className="flex items-start gap-2">
+              {p.after != null ? <input type="checkbox" className="mt-1" checked={picked.has(p.path)} onChange={() => toggle(p.path)} /> : <span className="mt-1 w-[13px] text-center text-xs text-paper/40" title="No replacement: fix by hand">!</span>}
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs">{p.path}</span><span className={`chip text-xs ${p.severity === "fix" ? "border-red-300/60 bg-red-300/10" : "border-paper/30"}`}>{p.severity}</span></span>
+                <span className="mt-1 block text-paper/80">{p.reason}</span>
+                <span className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <span className="block rounded-lg bg-black/30 p-2 font-mono text-xs whitespace-pre-wrap text-paper/60"><span className="step">before</span>{show(p.before)}</span>
+                  <span className="block rounded-lg bg-gloo/10 p-2 font-mono text-xs whitespace-pre-wrap"><span className="step">after</span>{p.after == null ? "no replacement proposed" : show(p.after)}</span>
+                </span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 

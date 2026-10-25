@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gloo-lessons": {
+      "command": "node",
+      "args": ["scripts/gloo-lessons-mcp.mjs"],
+      "env": { "GLOO_URL": "https://gloo.news" }
+    }
+  }
+}
