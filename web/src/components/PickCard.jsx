@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import SayIt from "./SayIt.jsx";
 import { speak, hush } from "../lib/speak.js";
+import { respeller } from "../lib/respell.js";
 import { sfx } from "../lib/sfx.js";
 import { flashRing } from "./Motion.jsx";
 
@@ -35,7 +36,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
 
   useEffect(() => {
     if (reveal) return;
-    if (spoken.current !== role.id) { spoken.current = role.id; speak(role.pick.question); }
+    if (spoken.current !== role.id) { spoken.current = role.id; speak(respeller(term)(role.pick.question)); }
     return hush;
   }, [role.id, reveal]);
 
@@ -50,8 +51,9 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
     setPicking(null);
     setReveal({ label, option, custom: !option, fresh: true });
     const first = role.sound_like ? `${label}. ${sayPart(role)}, like ${role.sound_like}.` : `${label}. ${sayPart(role)}.`;
-    setTimeout(() => speak(first), 700);
-    setTimeout(() => speak(`${sayPart(role)} means ${role.meaning}.`), 2400);
+    const say = respeller(term);
+    setTimeout(() => speak(say(first)), 700);
+    setTimeout(() => speak(say(`${sayPart(role)} means ${role.meaning}.`)), 2400);
   });
 
   const onSaid = (transcript) => { const o = matchOption(transcript, role.pick.options); choose(o ? o.name : transcript.trim().replace(/^(my favorite( one)? is|it's|its|i like|i love)\s+/i, "").slice(0, 40), o); };

@@ -5,6 +5,7 @@ import SayIt from "./SayIt.jsx";
 import PickCard from "./PickCard.jsx";
 import { Rail } from "./Motion.jsx";
 import { speak, hush } from "../lib/speak.js";
+import { respeller } from "../lib/respell.js";
 import { sfx } from "../lib/sfx.js";
 import { CloseIcon } from "./Icons.jsx";
 
@@ -102,7 +103,7 @@ function Captured({ glued, onRegue, onClose }) {
 // The server scores the attempt against the sound pieces in the background.
 function FirstAttempt({ term, health, guard, onSaved }) {
   const [busy, setBusy] = useState(false);
-  useEffect(() => { speak(term.first_attempt?.question ?? "How would you say it?"); return hush; }, [term.id]);
+  useEffect(() => { speak(respeller(term)(term.first_attempt?.question ?? "How would you say it?")); return hush; }, [term.id]);
   const save = (body) => guard(async () => { setBusy(true); try { await api.firstAttempt(term.id, body); onSaved(); } finally { setBusy(false); } });
   return (
     <section className="mt-5">
@@ -123,6 +124,7 @@ function Together({ term, roles, chosen, onNext, onBack }) {
     .map((x) => ({ ...x, option: x.pick ? x.role.pick.options.find((o) => o.name === x.pick.label) ?? null : null }));
   useEffect(() => {
     const timers = [];
+    const say = respeller(term);
     const slideEnd = 200 + roles.length * 40 + 620;
     timers.push(setTimeout(() => sfx("tick"), slideEnd));
     roles.forEach((r, i) => {
@@ -130,7 +132,7 @@ function Together({ term, roles, chosen, onNext, onBack }) {
       timers.push(setTimeout(() => { setLit(i); sfx("tick"); speak(sayPart(r)); }, at));
     });
     const tL = slideEnd + 200 + roles.length * 900 + 200;
-    timers.push(setTimeout(() => { setGlow(true); sfx("chime"); speak(`${sayTitle(term)}. ${term.summary}`); }, tL));
+    timers.push(setTimeout(() => { setGlow(true); sfx("chime"); speak(say(`${sayTitle(term)}. ${term.summary}`)); }, tL));
     return () => { timers.forEach(clearTimeout); hush(); };
   }, [term.id]);
   return (
