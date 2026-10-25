@@ -8,9 +8,14 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { createGlooClient, TOOLS } from "../../scripts/gloo-lessons-mcp.mjs";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
 const SERVER = fileURLToPath(new URL("../src/index.mjs", import.meta.url));
+const MCP = fileURLToPath(new URL("../../scripts/gloo-lessons-mcp.mjs", import.meta.url));
 const PORT = 8799;
-let fake, proc, calls = 0, ttsCalls = 0;
+let fake, proc, calls = 0, ttsCalls = 0, reviewInstruction = null;
 
 // Fake Anthropic Messages API: one Qloo describe call, then a proposal with one real and one invented ID.
 const reply = (content) => ({ id: "msg", type: "message", role: "assistant", model: "fake", stop_reason: "tool_use", content, usage: { input_tokens: 10, output_tokens: 10 } });
@@ -26,8 +31,25 @@ before(async () => {
         return res.end(JSON.stringify({ audioContent: Buffer.from(`MP3|${parsed.voice?.name}|${parsed.input?.ssml}`).toString("base64") }));
       }
       const offered = (parsed.tools ?? []).map((t) => t.name);
-      const forcedTool = ["resolve_term", "draft_lesson", "read_word", "suggest_field"].find((n) => offered.includes(n));
+      const forcedTool = ["resolve_term", "draft_lesson", "read_word", "suggest_field", "review_lesson"].find((n) => offered.includes(n));
       res.setHeader("content-type", "application/json");
+      if (forcedTool === "review_lesson") {
+        // The reviewer: the deterministic findings and the owner's instruction reach the model; it answers with a mix of
+        // good proposals and ones the server must drop (bad path, no change, invalid value, an answer its rubric rejects).
+        const user = String(parsed.messages?.[0]?.content ?? "");
+        const lesson = JSON.parse(user.split("\n\n")[0].replace("Lesson (JSON):\n", ""));
+        assert.ok(String(parsed.system).includes("Every pick option must carry"), "product rules in the system prompt");
+        if (lesson.id === "cholecystokinin") assert.ok(user.includes("- prompts[cck-cysto].answer (fix)"), "deterministic finding put to the model");
+        reviewInstruction = /Owner's instruction for this review: (.+)/.exec(user)?.[1] ?? "";
+        return res.end(JSON.stringify(reply([{ type: "tool_use", id: "rv1", name: "review_lesson", input: { notes: "Reviewed by the fake model.", proposals: [
+          { path: "summary", after: "Chole is bile, cysto is the sac, kin is movement. The hormone that moves the bile sac.", reason: "Shorter and spoken.", severity: "improve" },
+          { path: "prompts[cck-cysto].answer", after: "Cysto", reason: "Matches the accept rule.", severity: "fix" },
+          { path: "roles[chole].nickname", after: "x", reason: "no such field", severity: "fix" },
+          { path: "definition", after: lesson.definition, reason: "unchanged", severity: "improve" },
+          { path: "pronunciation.ipa", after: "/bad/", reason: "slashes", severity: "fix" },
+          { path: "prompts[cck-chole].answer", after: "Soda.", reason: "a misconception", severity: "fix" },
+        ] } }])));
+      }
       if (forcedTool === "suggest_field") {
         // Echo what was asked, so the test can check the field, the current value and the instruction reached the model.
         const user = String(parsed.messages?.[0]?.content ?? "");
@@ -391,4 +413,124 @@ test("owner: a learner's draft is promoted into the shared store as provisional,
   const a = (await other("POST", "/api/attempts", { prompt_id: "peristalsis-q1", response: "around", idempotency_key: "promoted-q1-0001" })).body;
   assert.equal(a.outcome, "correct");
   assert.equal(a.provisional, false);
+});
+
+// ---- The reviewer: proposals wait on the lesson; the owner accepts some, discards the rest ----
+test("owner: review stores proposals (deterministic + model) without a version; accept applies the chosen paths; discard clears", async () => {
+  const o = owner(), s = session();
+  const before = (await o("GET", "/api/admin/lessons/cholecystokinin")).body;
+  const r = await o("POST", "/api/admin/lessons/cholecystokinin/review", { instruction: "plainer words" }, { "x-gloo-editor": "loren" });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.version, before.version, "a review is not an edit");
+  assert.equal(reviewInstruction, "plainer words");
+  const { pending } = r.body;
+  assert.equal(pending.by, "loren");
+  assert.equal(pending.instruction, "plainer words");
+  const paths = pending.proposals.map((p) => p.path);
+  const summary = pending.proposals.find((p) => p.path === "summary");
+  assert.equal(summary.before, before.summary);
+  assert.equal(summary.after, "Chole is bile, cysto is the sac, kin is movement. The hormone that moves the bile sac.");
+  assert.match(summary.reason, /spoken aloud.*Shorter and spoken/s, "the deterministic reason and the model's are joined");
+  const cysto = pending.proposals.find((p) => p.path === "prompts[cck-cysto].answer");
+  assert.equal(cysto.severity, "fix");
+  assert.equal(cysto.after, "Cysto");
+  for (const p of ["roles[chole].nickname", "definition", "pronunciation.ipa", "prompts[cck-chole].answer"]) assert.ok(!paths.includes(p), `${p} dropped`);
+  assert.ok(pending.notes.some((n) => /roles\[chole\]\.nickname/.test(n)));
+  assert.ok(pending.notes.some((n) => /prompts\[cck-chole\]\.answer.*still fails its rubric/.test(n)));
+  assert.ok(pending.notes.includes("Reviewed by the fake model."));
+  assert.deepEqual((await o("GET", "/api/admin/lessons/cholecystokinin")).body.pending, pending, "GET returns the pending proposals");
+  // Learners never see proposals, and nothing changed for them yet.
+  const learner = (await s("GET", "/api/terms")).body.find((t) => t.id === "cholecystokinin");
+  assert.equal(learner.summary, before.summary);
+  assert.ok(!("pending" in learner));
+
+  assert.equal((await o("POST", "/api/admin/lessons/cholecystokinin/proposals/accept", { paths: ["summary", "nope"] })).status, 400);
+  assert.equal((await o("POST", "/api/admin/lessons/cholecystokinin/proposals/accept", { paths: [] })).status, 400);
+  const a = await o("POST", "/api/admin/lessons/cholecystokinin/proposals/accept", { paths: ["summary"] }, { "x-gloo-editor": "loren" });
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(a.body.version, before.version + 1);
+  assert.equal(a.body.edited_by, "reviewer via loren");
+  assert.equal(a.body.summary, summary.after);
+  assert.equal(a.body.prompts[1].answer, "Cyst or cysto.", "the unchosen proposal is not applied");
+  assert.equal(a.body.pending, undefined);
+  assert.deepEqual(a.body.history[0].changed, ["summary"]);
+  assert.equal((await s("GET", "/api/terms")).body.find((t) => t.id === "cholecystokinin").summary, summary.after, "live for learners");
+  assert.equal((await o("POST", "/api/admin/lessons/cholecystokinin/proposals/accept", { paths: ["summary"] })).status, 400, "nothing pending");
+
+  const again = await o("POST", "/api/admin/lessons/cholecystokinin/review", {});
+  assert.ok(again.body.pending.proposals.length >= 1);
+  const d = await o("POST", "/api/admin/lessons/cholecystokinin/proposals/discard");
+  assert.equal(d.status, 200);
+  assert.equal(d.body.pending, undefined);
+  assert.equal(d.body.version, before.version + 1);
+  assert.equal((await o("POST", "/api/admin/lessons/nope/review", {})).status, 404);
+  assert.equal((await owner("not-it")("POST", "/api/admin/lessons/cholecystokinin/review", {})).status, 403);
+});
+
+test("owner: draft a new shared lesson for a word; it arrives provisional and is live for learners", async () => {
+  const o = owner(), s = session();
+  assert.equal((await o("POST", "/api/admin/lessons/draft", {})).status, 400);
+  assert.equal((await o("POST", "/api/admin/lessons/draft", { word: "x", id: "Bad Id" })).status, 400);
+  const r = await o("POST", "/api/admin/lessons/draft", { word: "Peristalsis", id: "peristalsis-draft" }, { "x-gloo-editor": "loren" });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.id, "peristalsis-draft");
+  assert.equal(r.body.review_status, "provisional");
+  assert.equal(r.body.edited_by, "loren");
+  assert.equal(r.body.prompts[0].id, "peristalsis-draft-q1");
+  assert.deepEqual(r.body.promoted_from, { provisional_id: null, origin: "ai-draft" });
+  assert.equal((await o("POST", "/api/admin/lessons/draft", { word: "Peristalsis", id: "peristalsis-draft" })).status, 409);
+  assert.equal((await s("GET", "/api/terms")).body.find((t) => t.id === "peristalsis-draft").provisional, true);
+});
+
+// ---- The MCP server: the same owner API as tools, token from the environment ----
+test("mcp: tool handlers edit lessons through the owner API; a wrong or missing token is an error result, not a crash", async () => {
+  const mcp = createGlooClient({ url: `http://localhost:${PORT}/`, token: "test-owner-token", editor: "claude" });
+  const read = (r) => { assert.ok(!r.isError, r.content[0].text); return JSON.parse(r.content[0].text); };
+  assert.deepEqual(TOOLS.map((t) => t.name), ["list_lessons", "get_lesson", "patch_lesson", "suggest_field", "review_lesson", "accept_proposals", "discard_proposals", "publish_lesson", "draft_lesson"]);
+  assert.ok(read(await mcp.call("list_lessons")).some((l) => l.id === "brier-score"));
+  const before = read(await mcp.call("get_lesson", { id: "brier-score" }));
+  assert.equal(before.prompts[0].answer.slice(0, 7), "How far");
+  const patched = read(await mcp.call("patch_lesson", { id: "brier-score", patch: { roles: [{ id: "sound", say: "bry-ur" }] } }));
+  assert.equal(patched.version, before.version + 1);
+  assert.equal(patched.edited_by, "claude");
+  assert.equal(patched.roles[0].say, "bry-ur");
+  const bad = await mcp.call("patch_lesson", { id: "brier-score", patch: { title: "" } });
+  assert.equal(bad.isError, true);
+  assert.match(bad.content[0].text, /title: a short non-empty string/);
+  assert.equal(read(await mcp.call("suggest_field", { id: "brier-score", field: "summary", instruction: "shorter" })).suggestion, "Suggested summary (shorter)");
+  const reviewed = read(await mcp.call("review_lesson", { id: "brier-score", instruction: "focus on the summary" }));
+  assert.ok(reviewed.pending.proposals.some((p) => p.path === "summary"));
+  const accepted = read(await mcp.call("accept_proposals", { id: "brier-score", paths: ["summary"] }));
+  assert.equal(accepted.version, patched.version + 1);
+  assert.equal(accepted.edited_by, "reviewer via claude");
+  assert.equal(accepted.pending, undefined);
+  read(await mcp.call("review_lesson", { id: "brier-score" }));
+  assert.equal(read(await mcp.call("discard_proposals", { id: "brier-score" })).pending, undefined);
+  const published = read(await mcp.call("publish_lesson", { id: "peristalsis-draft" }));
+  assert.equal(published.review_status, "reviewed");
+  assert.equal((await mcp.call("get_lesson", { id: "nope" })).isError, true);
+  assert.equal((await mcp.call("no_such_tool", {})).isError, true);
+  const wrong = await createGlooClient({ url: `http://localhost:${PORT}`, token: "not-it" }).call("list_lessons");
+  assert.equal(wrong.isError, true);
+  assert.match(wrong.content[0].text, /didn't match/);
+  const none = await createGlooClient({ url: `http://localhost:${PORT}`, token: "" }).call("list_lessons");
+  assert.match(none.content[0].text, /GLOO_ADMIN_TOKEN is not set/);
+});
+
+test("mcp: the stdio server lists its tools and answers a call, reading the token from its environment", async () => {
+  const client = new Client({ name: "gloo-test", version: "0" });
+  const transport = new StdioClientTransport({ command: process.execPath, args: [MCP], env: { ...process.env, GLOO_URL: `http://localhost:${PORT}`, GLOO_ADMIN_TOKEN: "test-owner-token" }, stderr: "ignore" });
+  await client.connect(transport);
+  try {
+    const { tools } = await client.listTools();
+    assert.deepEqual(tools.map((t) => t.name).sort(), TOOLS.map((t) => t.name).sort());
+    assert.ok(tools.every((t) => t.inputSchema?.type === "object"));
+    const r = await client.callTool({ name: "get_lesson", arguments: { id: "cholecystokinin" } });
+    assert.ok(!r.isError);
+    const lesson = JSON.parse(r.content[0].text);
+    assert.equal(lesson.id, "cholecystokinin");
+    assert.ok(lesson.version >= 3);
+    const e = await client.callTool({ name: "get_lesson", arguments: { id: "nope" } });
+    assert.equal(e.isError, true);
+  } finally { await client.close(); }
 });

@@ -17,6 +17,7 @@ import { ID as LESSON_ID, readField } from "./lessons.mjs";
 import { runCueAgent, runSyntheticAgent, agentMode, MODEL } from "./agent.mjs";
 import { setVocabulary, resolveLocal, pickFromOcr, normalize } from "./resolve/index.mjs";
 import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket, suggestField } from "./drafter.mjs";
+import { reviewLesson } from "./reviewer.mjs";
 import { sttMode, transcribe, splitWake } from "./speech.mjs";
 import { readWord } from "./reader.mjs";
 import { art } from "./art.mjs";
@@ -557,6 +558,59 @@ app.post("/api/admin/lessons/:id/suggest", admin, wrap(async (req, res) => {
     console.error("suggest_field:", e.message);
     res.status(502).json({ error: "The model didn't answer. Try again.", code: "SUGGEST_FAILED" });
   }
+}));
+
+// Review the whole lesson. Deterministic checks always run; the model is asked once when configured. The result is
+// stored on the lesson as `pending` proposals (no version change) until the owner accepts some or discards them.
+app.post("/api/admin/lessons/:id/review", admin, wrap(async (req, res) => {
+  const doc = lessons.get(req.params.id);
+  if (!doc) return res.status(404).json({ error: "unknown lesson" });
+  const instruction = String(req.body?.instruction ?? "").trim().slice(0, 600) || null;
+  const t0 = performance.now();
+  const { proposals, notes } = await reviewLesson(doc, { instruction });
+  if (agentMode() === "live") q.logCall.run(req.sid, "anthropic", "review_lesson", notes.some((n) => n.startsWith("The model call failed")) ? "error" : "ok", null, performance.now() - t0, Date.now());
+  const saved = await lessons.setPending(doc.id, { created_at: new Date().toISOString(), by: req.editor, instruction, proposals, notes });
+  res.json(adminView(saved));
+}));
+
+// Accept the chosen proposals as one new version (editor "reviewer via <who>"), clearing every proposal.
+app.post("/api/admin/lessons/:id/proposals/accept", admin, wrap(async (req, res) => {
+  let doc;
+  try { doc = await lessons.acceptProposals(req.params.id, req.body?.paths, { editor: `reviewer via ${req.editor}` }); } catch (e) { return lessonErrors(e, res); }
+  await refreshContent();
+  res.json(adminView(doc));
+}));
+
+app.post("/api/admin/lessons/:id/proposals/discard", admin, wrap(async (req, res) => {
+  let doc;
+  try { doc = await lessons.discardProposals(req.params.id); } catch (e) { return lessonErrors(e, res); }
+  res.json(adminView(doc));
+}));
+
+// Draft a new shared lesson for a word (the same drafter learners get) and store it as provisional. Body { word, id? }.
+app.post("/api/admin/lessons/draft", admin, wrap(async (req, res) => {
+  const word = String(req.body?.word ?? "").trim().slice(0, 60);
+  if (!word) return res.status(400).json({ error: "word: the term to draft a lesson for" });
+  const pii = findPersonalData(word);
+  if (pii) return res.status(400).json({ error: `That looks like a ${pii}. Draft a word or term instead.` });
+  const id = String(req.body?.id ?? normalize(word).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")).slice(0, 60);
+  if (!LESSON_ID.test(id)) return res.status(400).json({ error: "id: lowercase letters, digits and dashes", problems: [`id: must match ${LESSON_ID}`] });
+  if (lessons.get(id)) return res.status(409).json({ error: `lesson ${id} already exists` });
+  let packet;
+  if (agentMode() === "live") {
+    const t0 = performance.now();
+    try { packet = await draftLesson(id, word); q.logCall.run(req.sid, "anthropic", "draft_lesson", "ok", null, performance.now() - t0, Date.now()); }
+    catch (e) { q.logCall.run(req.sid, "anthropic", "draft_lesson", "error", null, performance.now() - t0, Date.now()); console.error("draft_lesson:", e.message);
+      return res.status(502).json({ error: "Couldn't draft a lesson for that word right now.", code: "DRAFT_FAILED" }); }
+  } else if (MOCK) {
+    packet = syntheticLesson(id, word);
+  } else {
+    return res.status(503).json({ error: "The lesson agent isn't configured on this server.", code: "AGENT_UNAVAILABLE" });
+  }
+  let doc;
+  try { doc = await lessons.promote(packet, { id, editor: req.editor, origin: packet.origin, from: null }); } catch (e) { return lessonErrors(e, res); }
+  await refreshContent();
+  res.status(201).json(adminView(doc));
 }));
 
 // ---- Learner data controls ----

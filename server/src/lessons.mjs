@@ -166,7 +166,7 @@ const TOP_OBJECTS = ["pronunciation", "first_attempt", "graph"];
 const ROLE_FIELDS = ["label", "part", "say", "ipa", "sound_like", "meaning", "target", "look_for"];
 const OPTION_FIELDS = ["name", "wiki", "say", "connection", "qloo"];
 const PROMPT_FIELDS = ["skill", "type", "question", "hint", "answer", "accept_all", "accept_any", "expected", "options", "misconceptions", "bonus"];
-const META = new Set(["id", "version", "review_status", "reviewed_at", "edited_by", "edited_at", "history", "provisional", "promoted_from"]);
+const META = new Set(["id", "version", "review_status", "reviewed_at", "edited_by", "edited_at", "history", "provisional", "promoted_from", "pending"]);
 
 const mergeFields = (target, patch, fields, at, problems) => {
   for (const k of Object.keys(patch)) {
@@ -184,7 +184,7 @@ const locate = (list, item, at, problems) => {
 
 export function applyPatch(doc, patch) {
   const problems = [];
-  const { history, ...packet } = structuredClone(doc);
+  const { history, pending, ...packet } = structuredClone(doc);
   const changed = [];
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return { packet, changed, problems: ["patch must be a JSON object"] };
   for (const [k, v] of Object.entries(patch)) {
@@ -248,6 +248,84 @@ export function readField(doc, path) {
   return node;
 }
 
+// ---- Proposal paths ----
+// The reviewer addresses one field by a path like "summary", "pronunciation.ipa", "roles[chole].say",
+// "roles[chole].pick.options[2].wiki", "prompts[cck-chole].answer"; dotted keys ("roles.chole.say") read the same.
+// A bracketed key is taken literally, so an option name with a dot in it still works.
+export function parsePath(path) {
+  const tokens = [];
+  const re = /\[([^\]]*)\]|([^.[\]]+)/g;
+  let m;
+  for (const s = String(path ?? ""); (m = re.exec(s)); ) tokens.push(m[1] !== undefined ? m[1] : m[2]);
+  return tokens.map((t) => t.trim()).filter(Boolean);
+}
+// Tokens -> the canonical bracket form the reviewer reports.
+const KEYED = new Set(["roles", "prompts", "options"]);
+export const formatPath = (tokens) => tokens.map((t, i) => (i === 0 ? t : KEYED.has(tokens[i - 1]) ? `[${t}]` : `.${t}`)).join("");
+
+// Read the value a path addresses (undefined when the path leads nowhere).
+export function readPath(doc, path) {
+  let node = doc;
+  for (const tok of parsePath(path)) {
+    if (node == null) return undefined;
+    if (Array.isArray(node)) {
+      const i = /^\d+$/.test(tok) ? Number(tok) : node.findIndex((x) => x && (x.id === tok || x.name === tok));
+      node = node[i];
+    } else if (Object.prototype.hasOwnProperty.call(node, tok)) node = node[tok];
+    else return undefined;
+  }
+  return node;
+}
+
+// One path + value -> the merge patch the store applies. Throws LessonError(INVALID) on a path the grammar can't express.
+const keyed = (tok) => (/^\d+$/.test(tok) ? { index: Number(tok) } : { id: tok });
+export function pathToPatch(path, value) {
+  const t = parsePath(path);
+  const err = (why) => { throw new LessonError("INVALID", `${path}: ${why}`, [`${path}: ${why}`]); };
+  if (!t.length) err("empty path");
+  const [head, key, ...rest] = t;
+  if (TOP_SCALARS.includes(head) || TOP_LISTS.includes(head)) { if (t.length !== 1) err("this field is patched whole"); return { [head]: value }; }
+  if (TOP_OBJECTS.includes(head)) { if (t.length !== 2) err("needs one sub-field, e.g. pronunciation.ipa"); return { [head]: { [key]: value } }; }
+  if (head === "prompts") {
+    if (t.length !== 3 || !PROMPT_FIELDS.includes(rest[0])) err(`needs prompts[<id>].<${PROMPT_FIELDS.join("|")}>`);
+    return { prompts: [{ ...keyed(key), [rest[0]]: value }] };
+  }
+  if (head === "roles") {
+    if (!key) err("needs a role id or index");
+    if (rest.length === 1 && ROLE_FIELDS.includes(rest[0])) return { roles: [{ ...keyed(key), [rest[0]]: value }] };
+    if (rest[0] !== "pick") err(`needs roles[<id>].<${ROLE_FIELDS.join("|")}> or roles[<id>].pick…`);
+    if (rest.length === 2 && rest[1] === "question") return { roles: [{ ...keyed(key), pick: { question: value } }] };
+    if (rest.length === 4 && rest[1] === "options" && OPTION_FIELDS.includes(rest[3])) {
+      const o = /^\d+$/.test(rest[2]) ? { index: Number(rest[2]) } : { name: rest[2] };
+      return { roles: [{ ...keyed(key), pick: { options: [{ ...o, [rest[3]]: value }] } }] };
+    }
+    err("needs roles[<id>].pick.question or roles[<id>].pick.options[<n>].<name|wiki|say|connection|qloo>");
+  }
+  err("not an editable field");
+}
+
+// Several single-field patches -> one patch, merging roles, prompts and options addressed by the same key.
+export function mergePatches(patches) {
+  const out = {};
+  const sameKey = (a, b) => (a.id != null && a.id === b.id) || (a.index != null && a.index === b.index) || (a.name != null && a.name === b.name);
+  const mergeInto = (list, item) => {
+    const hit = list.find((x) => sameKey(x, item));
+    if (!hit) return list.push(structuredClone(item));
+    for (const [k, v] of Object.entries(item)) {
+      if (k === "pick" && hit.pick && v && typeof v === "object") {
+        if (v.question !== undefined) hit.pick.question = v.question;
+        if (v.options) { hit.pick.options = hit.pick.options ?? []; v.options.forEach((o) => mergeInto(hit.pick.options, o)); }
+      } else hit[k] = structuredClone(v);
+    }
+  };
+  for (const p of patches) for (const [k, v] of Object.entries(p)) {
+    if (k === "roles" || k === "prompts") { out[k] = out[k] ?? []; v.forEach((item) => mergeInto(out[k], item)); }
+    else if (TOP_OBJECTS.includes(k) && out[k] && v && typeof v === "object") out[k] = { ...out[k], ...v };
+    else out[k] = structuredClone(v);
+  }
+  return out;
+}
+
 export class LessonError extends Error {
   constructor(code, message, problems) { super(message); this.code = code; this.problems = problems; }
 }
@@ -275,12 +353,14 @@ export function createLessonStore({ media, db = new DatabaseSync(":memory:"), se
     cache(doc);
     return doc;
   }
-  const snapshot = (doc) => { const { history, ...packet } = doc; return packet; };
+  const snapshot = (doc) => { const { history, pending, ...packet } = doc; return packet; };
   // The version after a change: `packet` is the new content, `doc` the stored one, which becomes the history entry.
   const next = (doc, { editor, changed, packet = doc, review_status, reviewed_at }) => {
     const entry = { version: doc.version, edited_by: doc.edited_by, edited_at: doc.edited_at, review_status: doc.review_status, changed, packet: snapshot(doc) };
-    return { ...packet, id: doc.id, version: doc.version + 1, edited_by: editor, edited_at: new Date().toISOString(),
+    const { pending, ...content } = packet;
+    return { ...content, id: doc.id, version: doc.version + 1, edited_by: editor, edited_at: new Date().toISOString(),
       review_status: review_status ?? doc.review_status, reviewed_at: reviewed_at === undefined ? doc.reviewed_at : reviewed_at,
+      ...(doc.pending && { pending: doc.pending }), // proposals outlive an ordinary edit; accept and discard clear them
       history: [entry, ...(doc.history ?? [])].slice(0, HISTORY) };
   };
 
@@ -322,6 +402,40 @@ export function createLessonStore({ media, db = new DatabaseSync(":memory:"), se
       if (problems.length) throw new LessonError("INVALID", "fix the lesson before publishing", problems);
       return save(next(doc, { editor, changed: ["review_status"], review_status: "reviewed", reviewed_at: new Date().toISOString().slice(0, 10) }));
     },
+    // ---- Pending proposals: the reviewer's whole-lesson patch, waiting for a person ----
+    // pending { created_at, by, instruction, proposals [{ path, before, after, reason, severity }], notes }.
+    // Storing or clearing proposals is not an edit: the version stays, nothing enters the history.
+    async setPending(id, pending) {
+      const doc = docs.get(id);
+      if (!doc) throw new LessonError("NOT_FOUND", `no lesson ${id}`);
+      const { pending: _old, ...rest } = doc;
+      return save(pending ? { ...rest, pending } : rest);
+    },
+    // Apply the chosen proposals as one patch (one new version), then clear every proposal.
+    async acceptProposals(id, paths, { editor = "reviewer" } = {}) {
+      const doc = docs.get(id);
+      if (!doc) throw new LessonError("NOT_FOUND", `no lesson ${id}`);
+      const proposals = doc.pending?.proposals ?? [];
+      if (!proposals.length) throw new LessonError("INVALID", "no proposals are pending", ["pending: nothing to accept"]);
+      const chosen = [...new Set((Array.isArray(paths) ? paths : []).map(String))];
+      const problems = [];
+      if (!chosen.length) problems.push("paths: choose at least one proposal");
+      const picked = chosen.map((p) => {
+        const hit = proposals.find((x) => x.path === p);
+        if (!hit) problems.push(`${p}: no such proposal`);
+        else if (hit.after == null) problems.push(`${p}: this proposal has no replacement to apply`);
+        return hit;
+      }).filter((x) => x && x.after != null);
+      if (problems.length) throw new LessonError("INVALID", "those proposals can't be applied", problems);
+      const patch = mergePatches(picked.map((p) => pathToPatch(p.path, p.after)));
+      const { packet, changed, problems: applyProblems } = applyPatch(doc, patch);
+      applyProblems.push(...validatePacket(packet));
+      if (applyProblems.length) throw new LessonError("INVALID", "the lesson didn't validate", applyProblems);
+      const { pending: _p, ...base } = doc;
+      return save(next(base, { editor, changed, packet }));
+    },
+    async discardProposals(id) { return store.setPending(id, null); },
+
     // A learner's provisional packet becomes a shared lesson, still labeled provisional until published.
     async promote(packet, { id, editor = "owner", origin = null, from = null } = {}) {
       if (!ID.test(String(id))) throw new LessonError("INVALID", "bad lesson id", [`id: must match ${ID}`]);
