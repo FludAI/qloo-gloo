@@ -445,8 +445,9 @@ app.post("/api/qloo/:op", gate, wrap(async (req, res) => {
 // Production: serve the built web app from the same origin.
 const dist = resolve(repoRoot, "web/dist");
 if (existsSync(dist)) {
-  app.use(express.static(dist, { index: false, maxAge: "1h" }));
-  app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(resolve(dist, "index.html")));
+  // Hashed assets can be cached for a year; the page itself never, so a deploy reaches every phone on the next open.
+  app.use(express.static(dist, { index: false, maxAge: "365d", immutable: true, setHeaders: (res, path) => { if (path.endsWith(".html")) res.setHeader("Cache-Control", "no-store"); } }));
+  app.get(/^\/(?!api\/).*/, (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(resolve(dist, "index.html")); });
 }
 
 app.use((err, _req, res, _next) => {
