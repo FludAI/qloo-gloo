@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import SayIt from "./SayIt.jsx";
 import { speak, hush } from "../lib/speak.js";
-import { respeller } from "../lib/respell.js";
 import { sfx } from "../lib/sfx.js";
 import { flashRing } from "./Motion.jsx";
 
@@ -26,8 +25,6 @@ export function matchOption(transcript, options) {
   return score >= 0.72 ? best : null;
 }
 
-const sayPart = (role) => role.say ?? role.part;
-
 export default function PickCard({ term, role, mine, health, guard, onPicked, onNext, onBack }) {
   const [reveal, setReveal] = useState(mine ? { label: mine.label, option: role.pick.options.find((o) => o.name === mine.label) ?? null, custom: !role.pick.options.some((o) => o.name === mine.label), fresh: false } : null);
   const [picking, setPicking] = useState(null); // name of the tile locking in
@@ -36,7 +33,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
 
   useEffect(() => {
     if (reveal) return;
-    if (spoken.current !== role.id) { spoken.current = role.id; speak(respeller(term)(role.pick.question)); }
+    if (spoken.current !== role.id) { spoken.current = role.id; speak(role.pick.question, { term }); }
     return hush;
   }, [role.id, reveal]);
 
@@ -50,10 +47,9 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
     await new Promise((r) => setTimeout(r, option ? 640 : 200)); // others fall back, then the reveal
     setPicking(null);
     setReveal({ label, option, custom: !option, fresh: true });
-    const first = role.sound_like ? `${label}. ${sayPart(role)}, like ${role.sound_like}.` : `${label}. ${sayPart(role)}.`;
-    const say = respeller(term);
-    setTimeout(() => speak(say(first)), 700);
-    setTimeout(() => speak(say(`${sayPart(role)} means ${role.meaning}.`)), 2400);
+    const first = role.sound_like ? `${label}. ${role.part}, like ${role.sound_like}.` : `${label}. ${role.part}.`;
+    setTimeout(() => speak(first, { term }), 700);
+    setTimeout(() => speak(`${role.part} means ${role.meaning}.`, { term }), 2400);
   });
 
   const onSaid = (transcript) => { const o = matchOption(transcript, role.pick.options); choose(o ? o.name : transcript.trim().replace(/^(my favorite( one)? is|it's|its|i like|i love)\s+/i, "").slice(0, 40), o); };

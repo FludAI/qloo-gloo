@@ -4,10 +4,13 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const SERVER = fileURLToPath(new URL("../src/index.mjs", import.meta.url));
 const PORT = 8799;
-let fake, proc, calls = 0;
+let fake, proc, calls = 0, ttsCalls = 0;
 
 // Fake Anthropic Messages API: one Qloo describe call, then a proposal with one real and one invented ID.
 const reply = (content) => ({ id: "msg", type: "message", role: "assistant", model: "fake", stop_reason: "tool_use", content, usage: { input_tokens: 10, output_tokens: 10 } });
@@ -16,6 +19,12 @@ before(async () => {
     let body = ""; req.on("data", (c) => (body += c));
     req.on("end", () => {
       const parsed = JSON.parse(body || "{}");
+      if (req.url === "/tts") {
+        // Fake Text-to-Speech: echoes the SSML it was sent as the "audio", so the test can read what was said.
+        ttsCalls++;
+        res.setHeader("content-type", "application/json");
+        return res.end(JSON.stringify({ audioContent: Buffer.from(`MP3|${parsed.voice?.name}|${parsed.input?.ssml}`).toString("base64") }));
+      }
       const offered = (parsed.tools ?? []).map((t) => t.name);
       const forcedTool = ["resolve_term", "draft_lesson", "read_word"].find((n) => offered.includes(n));
       res.setHeader("content-type", "application/json");
@@ -48,7 +57,8 @@ before(async () => {
     });
   }).listen(8798);
   proc = spawn(process.execPath, [SERVER, "--mock"], {
-    env: { ...process.env, PORT: String(PORT), DB_PATH: ":memory:", ANTHROPIC_API_KEY: "test-not-a-key", ANTHROPIC_BASE_URL: "http://localhost:8798" },
+    env: { ...process.env, PORT: String(PORT), DB_PATH: ":memory:", ANTHROPIC_API_KEY: "test-not-a-key", ANTHROPIC_BASE_URL: "http://localhost:8798",
+      TTS_ENDPOINT: "http://localhost:8798/tts", MEDIA_LOCAL: "1", MEDIA_DIR: mkdtempSync(join(tmpdir(), "gloo-api-media-")), LIMIT_TTS_PER_SESSION_HOUR: "2" },
     stdio: "ignore",
   });
   // A cold start on Windows can take several seconds; wait up to 30 s.
@@ -232,6 +242,8 @@ test("health reports capture capabilities and the gate state", async () => {
   assert.equal(h.gated, false);
   assert.equal(h.unlocked, true);
   assert.equal(h.stt, "mock");
+  assert.equal(h.tts, "google");
+  assert.equal(h.media, "local");
   assert.equal((await s("POST", "/api/unlock", { code: "anything" })).body.unlocked, true);
 });
 
@@ -241,4 +253,33 @@ test("gloo it: close calls go to the LLM backup", async () => {
   assert.equal(body.resolution.decision, "ambiguous");
   assert.equal(body.resolution.method, "ai");
   assert.equal(body.resolution.word, "breyers");
+});
+
+const raw = async (path, body, cookie = "") => fetch(`http://localhost:${PORT}${path}`, { method: "POST", headers: { "content-type": "application/json", ...(cookie && { cookie }) }, body: JSON.stringify(body) });
+
+test("say: the server speaks the pieces from IPA, once; hits are free of the limit; verify pins the clip", async () => {
+  const before = ttsCalls;
+  const first = await raw("/api/say", { text: "chole means bile.", term_id: "cholecystokinin" });
+  const cookie = first.headers.get("set-cookie").split(";")[0];
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("content-type"), "audio/mpeg");
+  assert.equal(first.headers.get("x-gloo-cache"), "miss");
+  const said = Buffer.from(await first.arrayBuffer()).toString();
+  assert.ok(said.startsWith("MP3|en-US-"));
+  assert.ok(said.includes('<phoneme alphabet="ipa" ph="koʊli">chole</phoneme>'));
+  const again = await raw("/api/say", { text: "chole means bile.", term_id: "cholecystokinin" }, cookie);
+  assert.equal(again.headers.get("x-gloo-cache"), "hit");
+  assert.equal(ttsCalls, before + 1);
+  // Limit is 2 synths per session per hour in this harness: a third new line is refused, old lines still play.
+  assert.equal((await raw("/api/say", { text: "second line", term_id: "cholecystokinin" }, cookie)).status, 200);
+  assert.equal((await raw("/api/say", { text: "third line", term_id: "cholecystokinin" }, cookie)).status, 429);
+  assert.equal((await raw("/api/say", { text: "chole means bile.", term_id: "cholecystokinin" }, cookie)).status, 200);
+  assert.equal(ttsCalls, before + 2);
+  const v = await raw("/api/say/verify", { text: "chole means bile.", term_id: "cholecystokinin", verified: true }, cookie);
+  assert.equal(v.status, 200);
+  assert.equal((await v.json()).verified, true);
+  assert.equal((await raw("/api/say", { text: "chole means bile.", term_id: "cholecystokinin" }, cookie)).headers.get("x-gloo-cache"), "verified");
+  assert.equal((await raw("/api/say/verify", { text: "never played", term_id: "cholecystokinin", verified: true }, cookie)).status, 404);
+  assert.equal((await raw("/api/say", { text: "", term_id: "cholecystokinin" }, cookie)).status, 400);
+  assert.equal((await raw("/api/say", { text: "x", term_id: "no-such-term" }, cookie)).status, 404);
 });

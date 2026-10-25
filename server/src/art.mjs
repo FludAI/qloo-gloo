@@ -1,10 +1,13 @@
-// Pictures for the favorite picks: the lead image of the matching Wikipedia article,
-// fetched once, cached in SQLite, and served from here so the browser never talks to
-// Wikipedia and the demo keeps working offline after the first load.
+// Pictures for the favorite picks: the lead image of the matching Wikipedia article, fetched once.
+// Durable copy in the media store (art/<sha256(title)>, bytes plus a JSON sidecar) so pictures
+// survive a redeploy; SQLite on the instance is the hot cache in front of it, a Map in front of that.
+// The browser never talks to Wikipedia, so the demo keeps working offline after the first load.
 import { db } from "./db.mjs";
+import { media, sha256 } from "./media.mjs";
 
 const UA = "qloo-gloo/0.1 (hackathon demo; https://github.com/FludAI/qloo-gloo)";
 const TTL_MS = 30 * 24 * 3600e3;
+const MISS_TTL_MS = 3600e3; // a miss is retried after an hour
 const WIDTH = 640;
 const hot = new Map();
 
@@ -25,27 +28,45 @@ async function fetchArt(title) {
   if (!img.ok) return null;
   const mime = img.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";
   if (!mime.startsWith("image/")) return null;
-  const bytes = new Uint8Array(await img.arrayBuffer());
+  const bytes = Buffer.from(await img.arrayBuffer());
   if (bytes.length > 3_000_000) return null;
   return { mime, bytes };
 }
 
+export const artKey = (title) => `art/${sha256(String(title).trim().toLowerCase())}`;
+const fresh = (at) => Date.now() - at < TTL_MS;
+const stamp = (value) => (value ? Date.now() : Date.now() - TTL_MS + MISS_TTL_MS);
+
 // Returns { mime, bytes } or null. Misses are remembered briefly so a bad title doesn't hammer Wikipedia.
-export async function art(title) {
+export async function art(title, { store = media } = {}) {
   const key = String(title ?? "").trim().slice(0, 120);
   if (!key) return null;
   const h = hot.get(key);
-  if (h && Date.now() - h.at < TTL_MS) return h.value;
+  if (h && fresh(h.at)) return h.value;
   const row = getRow.get(key);
-  if (row && Date.now() - row.at < TTL_MS) {
+  if (row && fresh(row.at)) {
     const value = row.mime ? { mime: row.mime, bytes: row.bytes } : null;
     hot.set(key, { at: row.at, value });
     return value;
   }
-  let value = null;
-  try { value = await fetchArt(key); } catch { value = null; }
-  const at = Date.now();
-  hot.set(key, { at: value ? at : at - TTL_MS + 3600e3, value }); // a miss is retried after an hour
-  try { putRow.run(key, value?.mime ?? null, value?.bytes ?? null, value ? at : at - TTL_MS + 3600e3); } catch { /* cache only */ }
+  // The durable copy: a hit here costs nothing and survives redeploys.
+  let value = null, at = null;
+  try {
+    const side = await store.getJson(`${artKey(key)}.json`);
+    if (side && fresh(side.at)) {
+      const bytes = side.mime ? await store.get(`${artKey(key)}.bin`) : null;
+      if (!side.mime || bytes) { value = side.mime ? { mime: side.mime, bytes } : null; at = side.at; }
+    }
+  } catch { /* fall through to Wikipedia */ }
+  if (at === null) {
+    try { value = await fetchArt(key); } catch { value = null; }
+    at = stamp(value);
+    try {
+      if (value) await store.put(`${artKey(key)}.bin`, value.bytes, value.mime);
+      await store.putJson(`${artKey(key)}.json`, { title: key, mime: value?.mime ?? null, at });
+    } catch (e) { console.warn("art store:", e.message); }
+  }
+  hot.set(key, { at, value });
+  try { putRow.run(key, value?.mime ?? null, value?.bytes ?? null, at); } catch { /* cache only */ }
   return value;
 }

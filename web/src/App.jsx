@@ -5,6 +5,7 @@ import Flow from "./components/Flow.jsx";
 import Passcode from "./components/Passcode.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
+import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
 import { CameraIcon, CloseIcon, InfoIcon, LockIcon, MicIcon } from "./components/Icons.jsx";
 
 // Gloo is a camera. Camera and mic on (phone or glasses), or you don't proceed. No typing anywhere.
@@ -25,7 +26,7 @@ export default function App() {
   const toastTimer = useRef(null);
 
   const say = useCallback((msg) => { setToast(msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(""), 3500); }, []);
-  const loadHealth = useCallback(() => api.health().then(setHealth).catch(() => setHealth({ offline: true })), []);
+  const loadHealth = useCallback(() => api.health().then((h) => { configureSpeech(h); setHealth(h); }).catch(() => setHealth({ offline: true })), []);
   const loadTerms = useCallback(() => api.terms().then(setTerms).catch(() => {}), []);
   useEffect(() => {
     // A shared link can carry the passcode (?code=...), so nobody has to type it.
@@ -69,7 +70,7 @@ export default function App() {
     onText: ({ transcript }) => glue({ mode: "voice", text: transcript, ...(frame() ?? {}) }, "Listening…"),
   });
 
-  const openCamera = () => { warmAudio(); cam.current?.start(); };
+  const openCamera = () => { warmAudio(); unlockAudio(); cam.current?.start(); };
   const onCamState = (s, extra) => { setCamState(s); if (s === "live") setMicGranted(Boolean(extra?.mic)); };
   const live = camState === "live";
   const locked = health?.gated && !health?.unlocked;
@@ -136,6 +137,24 @@ export default function App() {
   );
 }
 
+// Owner's debug area: did the last clip sound right? Right pins it forever; wrong unpins it. Not part of the learner flow.
+function VerifyClip() {
+  const last = lastSpoken();
+  const [state, setState] = useState("");
+  if (!last) return <p className="mt-4 font-mono text-[11px] text-paper/40">debug · voice {speechMode()} · nothing played yet</p>;
+  const mark = (verified) => api.sayVerify({ ...last, verified }).then((r) => setState(r.verified ? "pinned" : "unpinned")).catch((e) => setState(e.message));
+  return (
+    <div className="mt-4 rounded-xl border border-paper/15 px-3 py-2 font-mono text-[11px] text-paper/60">
+      <div>debug · voice {speechMode()} · last: “{last.text.slice(0, 60)}{last.text.length > 60 ? "…" : ""}”</div>
+      <div className="mt-1.5 flex items-center gap-2">
+        <button className="rounded-full border border-paper/30 px-2 py-0.5" onClick={() => mark(true)}>sounds right</button>
+        <button className="rounded-full border border-paper/30 px-2 py-0.5" onClick={() => mark(false)}>sounds wrong</button>
+        {state && <span>{state}</span>}
+      </div>
+    </div>
+  );
+}
+
 function InfoSheet({ health, micGranted, onClose, onPasscode }) {
   const [msg, setMsg] = useState("");
   const download = async () => {
@@ -155,6 +174,7 @@ function InfoSheet({ health, micGranted, onClose, onPasscode }) {
           <ul className="mt-4 space-y-1.5 text-sm">
             {row("Camera reading", health.camera === "live", health.camera)}
             {row("Speech", health.stt === "google", health.stt === "google" ? "server" : health.stt === "mock" ? "mock" : "browser only")}
+            {row("Voice", health.tts === "google", health.tts === "google" ? health.voice ?? "server" : "browser only")}
             {row("Microphone", micGranted, micGranted ? "allowed" : "ask when held")}
             {row("Cue agent", health.agent.mode === "live", health.agent.mode === "live" ? health.agent.model : health.agent.mode)}
             {row("Qloo", health.qloo.ready, health.qloo.mode === "mock" ? "mock data" : health.qloo.ready ? "live" : "key missing")}
@@ -162,6 +182,7 @@ function InfoSheet({ health, micGranted, onClose, onPasscode }) {
           </ul>
         )}
         {health?.gated && !health?.unlocked && <button className="btn-light mt-3" onClick={onPasscode}>Enter passcode</button>}
+        {health?.tts === "google" && health?.unlocked && <VerifyClip />}
         <p className="mt-4 text-xs text-paper/50">Only the framed crop and a few seconds of audio go to the server; nothing is stored. Motion studies: <a className="underline" href="/motion/studies.html">/motion/studies.html</a>.</p>
         <p className="mt-3 flex gap-3 text-xs text-paper/60">
           <button className="underline" onClick={download}>Export my data</button>

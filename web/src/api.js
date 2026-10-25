@@ -35,6 +35,7 @@ export const api = {
   hint: (prompt_id) => post("/api/practice/hint", { prompt_id }),
   attempt: (body) => post("/api/attempts", body),
   progress: (termId) => get(`/api/progress/${termId}`),
+  sayVerify: (body) => post("/api/say/verify", body),
   exportData: () => get("/api/export"),
   deleteData: () => req("DELETE", "/api/learner"),
 };

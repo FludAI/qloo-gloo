@@ -5,7 +5,7 @@ export const brier = {
   version: "1.0.0",
   review: { status: "reviewed", reviewed_at: "2026-10-18" },
   title: "Brier score",
-  pronunciation: { approx: "BRY-er score", note: "Approximate learner guidance, not a phonetic transcription." },
+  pronunciation: { approx: "BRY-er score", ipa: "ˈbraɪər skɔːr", note: "Approximate learner guidance, not a phonetic transcription." },
   summary:
     "How good were your probability forecasts? Square the gap between each forecast and what actually happened (1 or 0), then average. Lower is better; 0 is perfect.",
   origin: "Named for Glenn W. Brier, who introduced it for weather-forecast verification in 1950.",
@@ -36,7 +36,7 @@ export const brier = {
     { label: "scikit-learn brier_score_loss", url: "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.brier_score_loss.html" },
   ],
   roles: [
-    { id: "sound", label: "Name sound", part: "Brier", say: "bry-er", meaning: "the name of the score", sound_like: "Breyers", target: "Brier", look_for: "something that sounds like “Brier”",
+    { id: "sound", label: "Name sound", part: "Brier", say: "bry-er", ipa: "ˈbraɪər", meaning: "the name of the score", sound_like: "Breyers", target: "Brier", look_for: "something that sounds like “Brier”",
       pick: { question: "Say the one that sounds like “Brier”.", options: [
         { name: "Breyers", wiki: "Breyers", say: ["breyers", "briars", "breyer"], qloo: { entity: "Breyers", type: "brand" }, connection: "Breyers ≈ Brier (approximate sound; Breyers has an extra ending sound)." },
         { name: "Briar Rose", wiki: "Sleeping Beauty (1959 film)", say: ["briar rose", "briar", "sleeping beauty"], qloo: { entity: "Sleeping Beauty", type: "movie" }, connection: "Briar ≈ Brier (approximate sound). Sleeping Beauty's other name." },

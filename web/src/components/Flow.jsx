@@ -5,15 +5,13 @@ import SayIt from "./SayIt.jsx";
 import PickCard from "./PickCard.jsx";
 import { Rail } from "./Motion.jsx";
 import { speak, hush } from "../lib/speak.js";
-import { respeller } from "../lib/respell.js";
 import { sfx } from "../lib/sfx.js";
 import { CloseIcon } from "./Icons.jsx";
 
 // After capture: one card at a time over the camera. Say it → one picture per sound piece → the whole
 // word from their pictures → practice → progress. Pieces before meaning: the sounds stick first.
 const HOW = { typed: "typed", voice: "heard", ocr: "read from a photo", camera: "read from the camera" };
-const sayPart = (r) => r.say ?? r.part;
-const sayTitle = (term) => term.pronunciation?.approx && term.pronunciation.approx !== "—" ? term.pronunciation.approx.replace(/-/g, " ") : term.title.replace(/\s*\(.*?\)\s*/g, "");
+const bareTitle = (term) => term.title.replace(/\s*\(.*?\)\s*/g, "").trim();
 
 export default function Flow({ termId, glued, health, guard, onClose, onRegue }) {
   const [term, setTerm] = useState(null);
@@ -103,7 +101,7 @@ function Captured({ glued, onRegue, onClose }) {
 // The server scores the attempt against the sound pieces in the background.
 function FirstAttempt({ term, health, guard, onSaved }) {
   const [busy, setBusy] = useState(false);
-  useEffect(() => { speak(respeller(term)(term.first_attempt?.question ?? "How would you say it?")); return hush; }, [term.id]);
+  useEffect(() => { speak(term.first_attempt?.question ?? "How would you say it?", { term }); return hush; }, [term.id]);
   const save = (body) => guard(async () => { setBusy(true); try { await api.firstAttempt(term.id, body); onSaved(); } finally { setBusy(false); } });
   return (
     <section className="mt-5">
@@ -124,15 +122,14 @@ function Together({ term, roles, chosen, onNext, onBack }) {
     .map((x) => ({ ...x, option: x.pick ? x.role.pick.options.find((o) => o.name === x.pick.label) ?? null : null }));
   useEffect(() => {
     const timers = [];
-    const say = respeller(term);
     const slideEnd = 200 + roles.length * 40 + 620;
     timers.push(setTimeout(() => sfx("tick"), slideEnd));
     roles.forEach((r, i) => {
       const at = slideEnd + 200 + i * 900;
-      timers.push(setTimeout(() => { setLit(i); sfx("tick"); speak(sayPart(r)); }, at));
+      timers.push(setTimeout(() => { setLit(i); sfx("tick"); speak(r.part, { term }); }, at));
     });
     const tL = slideEnd + 200 + roles.length * 900 + 200;
-    timers.push(setTimeout(() => { setGlow(true); sfx("chime"); speak(say(`${sayTitle(term)}. ${term.summary}`)); }, tL));
+    timers.push(setTimeout(() => { setGlow(true); sfx("chime"); speak(`${bareTitle(term)}. ${term.summary}`, { term }); }, tL));
     return () => { timers.forEach(clearTimeout); hush(); };
   }, [term.id]);
   return (

@@ -19,6 +19,8 @@ import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket } from "./d
 import { sttMode, transcribe, splitWake } from "./speech.mjs";
 import { readWord } from "./reader.mjs";
 import { art } from "./art.mjs";
+import { ttsMode, speaker, VOICE } from "./tts.mjs";
+import { media } from "./media.mjs";
 import { scorePieces, termPieces } from "./resolve/pieces.mjs";
 import { DOMAIN_TERMS } from "./resolve/domain-terms.mjs";
 
@@ -107,7 +109,8 @@ app.get("/api/health", wrap(async (req, res) => {
   }
   const agent = agentMode() === "live" ? { mode: "live", model: MODEL } : MOCK ? { mode: "synthetic" } : { mode: "unavailable" };
   const stt = MOCK ? "mock" : await sttMode();
-  res.json({ qloo, agent, stt, camera: agentMode() === "live" ? "live" : MOCK ? "mock" : "unavailable",
+  const [tts, mediaMode] = await Promise.all([ttsMode(), media.mode()]);
+  res.json({ qloo, agent, stt, tts, voice: tts === "google" ? VOICE : null, media: mediaMode, camera: agentMode() === "live" ? "live" : MOCK ? "mock" : "unavailable",
     gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), engine: ENGINE, schedule_policy: POLICY.version,
     unavailable: ["pronunciation scoring", "glasses input", "rewards", "encounter detection"] });
 }));
@@ -419,6 +422,44 @@ app.get("/api/progress/:termId", (req, res) => {
   res.json({ term_id: t.id, provisional: Boolean(t.provisional), skills, first_attempt: q.getFirst.get(req.sid, t.id) ?? null });
 });
 
+// ---- The app's voice: plain text in, MP3 out. The server wraps the term's pieces in IPA; a clip is
+// synthesized once ever and served from the media store after that (hits are free and unmetered). ----
+const SAY_MAX = 400;
+app.post("/api/say", gate, wrap(async (req, res) => {
+  const text = String(req.body?.text ?? "").replace(/\s+/g, " ").trim().slice(0, SAY_MAX);
+  if (!text) return res.status(400).json({ error: "text is required" });
+  const term = req.body?.term_id ? termFor(req.sid, req.body.term_id) : null;
+  if (req.body?.term_id && !term) return res.status(404).json({ error: "unknown term" });
+  if ((await ttsMode()) !== "google") return res.status(503).json({ error: "Server voice isn't configured.", code: "TTS_UNAVAILABLE" });
+  const t0 = performance.now();
+  let out;
+  try {
+    out = await speaker.say(text, term, { beforeSynth: () => take("tts", req.sid).ok });
+  } catch (e) {
+    q.logCall.run(req.sid, "google-tts", "synthesize", "error", null, performance.now() - t0, Date.now());
+    console.error("tts:", e.message);
+    return res.status(502).json({ error: "Couldn't make the audio.", code: "TTS_FAILED" });
+  }
+  if (out.denied) return res.status(429).json({ error: "Hourly voice limit reached for this session. The browser voice takes over." });
+  q.logCall.run(req.sid, "google-tts", "synthesize", "ok", out.cached ? "hit" : "miss", performance.now() - t0, Date.now());
+  res.setHeader("content-type", "audio/mpeg");
+  res.setHeader("cache-control", "private, max-age=86400");
+  res.setHeader("x-gloo-clip", out.clip);
+  res.setHeader("x-gloo-cache", out.verified ? "verified" : out.cached ? "hit" : "miss");
+  res.end(out.bytes);
+}));
+
+// Owner's ear: "sounds right" pins the clip forever; "sounds wrong" unpins it.
+app.post("/api/say/verify", gate, wrap(async (req, res) => {
+  const text = String(req.body?.text ?? "").replace(/\s+/g, " ").trim().slice(0, SAY_MAX);
+  if (!text || typeof req.body?.verified !== "boolean") return res.status(400).json({ error: "text and verified (true|false) are required" });
+  const term = req.body?.term_id ? termFor(req.sid, req.body.term_id) : null;
+  if (req.body?.term_id && !term) return res.status(404).json({ error: "unknown term" });
+  const r = await speaker.verify(text, term, req.body.verified);
+  if (!r) return res.status(404).json({ error: "No clip for that text yet. Play it first." });
+  res.json(r);
+}));
+
 // ---- Pictures for the picks (Wikipedia lead images, cached server-side) ----
 app.get("/api/art", wrap(async (req, res) => {
   const title = String(req.query.t ?? "").slice(0, 120);
@@ -456,4 +497,5 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: "Server error." });
 });
 
+media.mode().then((m) => console.log(`media: ${m}`)); // choose the store now, not on the first request
 app.listen(PORT, () => console.log(`qloo-gloo on :${PORT} · Qloo ${MOCK ? "MOCK" : "live"} · agent ${agentMode()} · engine ${ENGINE}${PASSCODE ? " · passcode gate on" : ""}`));

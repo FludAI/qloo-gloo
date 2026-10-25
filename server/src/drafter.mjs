@@ -38,6 +38,7 @@ const LESSON_TOOL = {
   input_schema: { type: "object", properties: {
     title: { type: "string" },
     pronunciation_approx: { type: "string", description: "Approximate learner respelling, e.g. koh-lih-sis-tuh-KY-nin" },
+    pronunciation_ipa: { type: "string", description: "IPA for the whole term as spoken in US English, no slashes, e.g. ˌkoʊlɪˌsɪstoʊˈkaɪnɪn" },
     summary: { type: "string", description: "One or two sentences. Use the meaning already inside the word if it has parts." },
     definition: { type: "string" },
     components: { type: "array", maxItems: 5, items: { type: "object", properties: {
@@ -50,6 +51,7 @@ const LESSON_TOOL = {
         part: { type: "string", description: "The word part itself, e.g. chole" }, meaning: { type: "string", description: "What the part means, e.g. bile" },
         sound_like: { type: ["string", "null"], description: "The everyday word the part sounds like, e.g. cola; null for meaning-only roles" },
         say: { type: "string", description: "How to say the part, as a respelling a speech engine reads correctly, e.g. koh-lee" },
+        ipa: { type: "string", description: "IPA for the part as it sounds inside the term (US English), no slashes, e.g. koʊli" },
         pick: { type: "object", description: "A favorite-pick: 3-4 well-known public names (brands, films, bands, books, teams) that ALL carry this part's sound or meaning, so any choice works as the cue",
           properties: { question: { type: "string", description: "Short and spoken, e.g. Say your favorite cola." },
             options: { type: "array", minItems: 3, maxItems: 4, items: { type: "object", properties: {
@@ -83,6 +85,8 @@ const arr = (x) => {
 const esc = (s) => String(s).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const anyOf = (words) => new RegExp(words.filter(Boolean).map(esc).join("|"));
 const clip = (s, n) => String(s ?? "").slice(0, n);
+// IPA from the model: letters, IPA symbols, stress and length marks only; slashes and brackets dropped; null when empty.
+const ipa = (s) => { const v = String(s ?? "").replace(/[/[\]]/g, "").replace(/[^\p{L}\p{M}ˈˌːˑ.‿ ]/gu, "").trim().slice(0, 60); return v || null; };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "role";
 
 // Turn model JSON into a packet with compiled rubrics (stored as JSON, compiled on load).
@@ -102,7 +106,7 @@ function shape(id, input, d, origin) {
   const components = arr(d.components).slice(0, 5).map((c) => ({ part: clip(c.part, 30), meaning: clip(c.meaning, 80), cue: c.cue ? clip(c.cue, 120) : "—" }));
   const roles = arr(d.roles).slice(0, 4).map((r) => ({
     id: slug(r.id), label: clip(r.label, 50), part: clip(r.part, 30) || clip(r.label, 30), meaning: clip(r.meaning, 60), sound_like: r.sound_like ? clip(r.sound_like, 30) : null,
-    say: r.say ? clip(r.say, 40) : null,
+    say: r.say ? clip(r.say, 40) : null, ipa: ipa(r.ipa),
     target: clip(r.target, 80), look_for: clip(r.look_for, 120),
     pick: arr(r.pick?.options).length ? { question: clip(r.pick.question, 80), options: arr(r.pick.options).slice(0, 4).map((o) => ({ name: clip(o.name, 40), wiki: o.wiki ? clip(o.wiki, 80) : null, say: [], qloo: null, connection: clip(o.connection, 160) })) } : undefined,
   }));
@@ -117,7 +121,7 @@ function shape(id, input, d, origin) {
     id, version: "draft-1", provisional: true, origin,
     review: { status: "provisional", reviewed_at: null },
     title, aliases: [input],
-    pronunciation: { approx: clip(d.pronunciation_approx, 60) || "—", note: "Approximate. Not reviewed." },
+    pronunciation: { approx: clip(d.pronunciation_approx, 60) || "—", ipa: ipa(d.pronunciation_ipa), note: "Approximate. Not reviewed." },
     summary: clip(d.summary, 400), definition: clip(d.definition, 400),
     components: components.length ? components : undefined,
     distinctions: arr(d.distinctions).slice(0, 4).map((x) => clip(x, 240)),

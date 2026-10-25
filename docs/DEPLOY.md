@@ -10,7 +10,10 @@ containers, so this works. Serverless *functions* would not.
 PROJECT=your-gcp-project
 REGION=us-central1
 gcloud config set project $PROJECT
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com speech.googleapis.com
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com speech.googleapis.com texttospeech.googleapis.com
+
+# Durable media: spoken clips and pictures, paid for once and kept across redeploys (private bucket, same region)
+gcloud storage buckets create gs://gloo-media-bondswipe --location $REGION --uniform-bucket-level-access --public-access-prevention
 
 # Secrets: paste each value when prompted (nothing lands in shell history)
 printf "Qloo key: " && read -s K && printf %s "$K" | gcloud secrets create qloo-api-key --data-file=- && unset K; echo
@@ -44,6 +47,49 @@ Spoken capture calls Speech-to-Text with the service's runtime account; no key
 is involved. The account needs the API enabled (above) and a role that includes
 `speech.recognize` (the default compute account's Editor role does).
 
+## The voice and the media bucket
+
+The app speaks every line through Google Cloud Text-to-Speech (`server/src/tts.mjs`)
+with one fixed voice, `en-US-Neural2-F`, so every phone hears the same thing. Each
+sound piece carries IPA (`role.ipa`, next to the `say` respelling) and the server
+wraps it, and the whole word, in SSML `<phoneme alphabet="ipa">` tags before
+synthesis. Chirp 3 HD voices were the first choice but they do not accept SSML, and
+the phoneme tag is the only way to pin a pronunciation, so the voice is Neural2.
+`TTS_VOICE` overrides it; health shows the voice in use.
+
+Clips live in the bucket `gs://gloo-media-bondswipe` (`MEDIA_BUCKET`), reached through
+the runtime account (Editor is enough), as `audio/<sha256(voice + ssml)>.mp3` with a
+JSON sidecar `{ text, term_id, ssml, voice, verified, created_at }`. Pictures for the
+picks go to `art/<sha256(title)>` in the same bucket. SQLite on the instance stays the
+hot cache and a small in-memory LRU sits in front, so a redeploy loses nothing that was
+paid for. Health reports `tts: "google" | "unavailable"` and `media: "gcs" | "local"`;
+without credentials (a laptop) the store is a folder under `server/data/media/` and the
+browser's own voice speaks.
+
+Rules:
+
+- **Pay once per sentence, ever.** `POST /api/say { text, term_id }` returns the stored
+  MP3 when the clip exists and synthesizes only on a miss. Hits never count against the
+  per-session limit (`LIMIT_TTS_PER_SESSION_HOUR`, default 60).
+- **A verified clip is never resynthesized.** `POST /api/say/verify { text, term_id,
+  verified: true }` (the "sounds right" button in the info sheet's debug area, owner
+  only) writes `verified/<sha256(term_id + text)>.json` pointing at the clip; that
+  pin is served forever, even after the voice or the SSML builder changes. `verified:
+  false` removes the pin, and the clip is rebuilt as soon as its IPA, voice or SSML
+  changes (which gives it a new key).
+- Both routes sit behind the passcode gate like the other metered routes. The web app
+  falls back to the browser voice on 401, 503 or any failure.
+
+Cost (checked 2026-10-24): Neural2 is $16 per 1M characters after 1M free per month,
+SSML tags included; Chirp 3 HD would be $30. A lesson's spoken lines run to a few
+thousand characters once, and never again. Bucket storage for a few hundred clips is
+cents per month. The one real synthesis after a deploy, with an unlocked session cookie
+in `jar.txt` (the smoke script keeps one):
+
+```bash
+curl -s -b jar.txt -X POST "$SMOKE_URL/api/say" -H 'content-type: application/json' -d '{"text":"chole","term_id":"cholecystokinin"}' -o chole.mp3 -D -
+```
+
 ## Custom domain
 
 `gloo.news` is mapped to the service with a Cloud Run domain mapping (the domain is
@@ -58,7 +104,8 @@ gcloud beta run domain-mappings describe --domain app.gloo.news --region $REGION
 ## Why one warm instance
 
 SQLite lives on the instance's `/tmp`, which Cloud Run keeps in memory and
-drops when the instance stops. `--min-instances 1 --max-instances 1` keeps a
+drops when the instance stops. Spoken clips and pictures are not affected: they
+live in the media bucket (above). `--min-instances 1 --max-instances 1` keeps a
 single warm instance so learner sessions persist for the judging window, and
 keeps all sessions on one database. A new revision starts with an empty
 database. For durable multi-instance hosting, move `server/src/db.mjs` to Cloud
@@ -78,6 +125,11 @@ Environment variables (defaults shown):
 | `LIMIT_QLOO_GLOBAL_DAY` | `150` | Qloo calls per day across all visitors (cache hits are free; cached answers persist in SQLite for `QLOO_CACHE_TTL_HOURS`, default 168) |
 | `LIMIT_STT_PER_SESSION_HOUR` | `40` | Transcriptions per session per hour |
 | `LIMIT_CAMERA_PER_SESSION_HOUR` | `40` | Camera reads per session per hour |
+| `LIMIT_TTS_PER_SESSION_HOUR` | `60` | New clips synthesized per session per hour (stored clips are free) |
+| `TTS_VOICE` | `en-US-Neural2-F` | The one voice; changing it rebuilds unverified clips only |
+| `TTS_DISABLE` | unset | `1` = never use the server voice |
+| `MEDIA_BUCKET` | `gloo-media-bondswipe` | Cloud Storage bucket for clips and pictures |
+| `MEDIA_LOCAL` / `MEDIA_DIR` | unset | `1` forces the local folder (tests); `MEDIA_DIR` moves it |
 | `DEMO_PASSCODE` | unset | When set, camera, voice, the agent and drafting need it once per session |
 
 Set a budget alert on the Anthropic account too. Qloo hackathon keys expire

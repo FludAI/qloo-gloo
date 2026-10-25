@@ -67,6 +67,8 @@ Express server (Node 22)
    ├─ resolve/        Gloo it word resolution (Levenshtein, Double Metaphone, Hunspell)
    ├─ reader.mjs      reads the framed camera crop (Claude vision)
    ├─ speech.mjs      hold-to-talk transcription (Google Speech-to-Text, vocabulary hints)
+   ├─ tts.mjs         the app's voice: one Neural2 voice, pieces pinned by IPA in SSML, clips paid for once
+   ├─ media.mjs       durable clips and pictures (Cloud Storage; a local folder without credentials)
    ├─ drafter.mjs     LLM backup for close calls; provisional lesson drafts
    ├─ agent.mjs       Claude tool-use loop ──► Qloo tools
    └─ qloo.mjs        one long-lived `qloo mcp` process (@qloo/qloo-harness)
@@ -146,7 +148,7 @@ Design decisions, including where this build departs from the Gloo spec, are in
 - Text answers are scored by reviewed rules. Unmatched paraphrases are marked
   "uncertain" and don't count either way.
 - The demo keeps one SQLite database on one Cloud Run instance. A redeploy
-  starts fresh.
+  starts fresh, except spoken clips and pictures, which live in a bucket.
 
 ## License
 

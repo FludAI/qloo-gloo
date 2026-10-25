@@ -3,7 +3,6 @@ import { api, newKey } from "../api.js";
 import SayIt from "./SayIt.jsx";
 import { AnswerRing, shake } from "./Motion.jsx";
 import { speak, hush } from "../lib/speak.js";
-import { respeller } from "../lib/respell.js";
 
 // One prompt at a time. Say the answer, or tap a choice. Cues stay hidden here.
 // Feedback: a ring closes with a chime on a hit, a shake and the answer on a miss, a soft ring on uncertain.
@@ -20,7 +19,7 @@ export default function Practice({ term, health, guard, onAttempt, onDone }) {
     setData(await api.next(term.id, after)); setHint(""); setResult(null); setHeard(""); setKey(newKey());
   };
   useEffect(() => { load().catch(() => {}); return hush; }, [term.id]);
-  useEffect(() => { if (data?.prompt && !result) speak(respeller(term)(data.prompt.question)); }, [data?.prompt?.id]);
+  useEffect(() => { if (data?.prompt && !result) speak(data.prompt.question, { term }); }, [data?.prompt?.id]);
 
   const submit = (value) => guard(async () => {
     if (busy || result || !String(value).trim()) return;
@@ -28,9 +27,8 @@ export default function Practice({ term, health, guard, onAttempt, onDone }) {
     try {
       const r = await api.attempt({ prompt_id: data.prompt.id, response: value, idempotency_key: key });
       setResult(r); onAttempt?.();
-      const say = respeller(term);
-      if (r.outcome === "incorrect") { shake(host.current); setTimeout(() => speak(say(r.answer ? `${r.feedback} ${r.answer}` : r.feedback)), 480); }
-      else if (r.outcome === "correct") setTimeout(() => speak(say(r.feedback)), 500);
+      if (r.outcome === "incorrect") { shake(host.current); setTimeout(() => speak(r.answer ? `${r.feedback} ${r.answer}` : r.feedback, { term }), 480); }
+      else if (r.outcome === "correct") setTimeout(() => speak(r.feedback, { term }), 500);
     } finally { setBusy(false); }
   });
 
