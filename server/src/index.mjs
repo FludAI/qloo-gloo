@@ -92,7 +92,9 @@ app.use((req, res, next) => {
 
 const unlocked = (sid) => !PASSCODE || Boolean(q.isUnlocked.get(sid)?.unlocked);
 const locked = (res) => res.status(401).json({ error: "This demo needs a passcode for camera, voice and the agent.", code: "PASSCODE_REQUIRED" });
-const gate = (req, res, next) => (unlocked(req.sid) ? next() : locked(res));
+// The owner's token opens the gated routes too (the /edit console uses voice without a passcode).
+const isOwner = (req) => { const given = String(req.headers["x-gloo-admin"] ?? "").trim(); const sha = (s) => createHash("sha256").update(s).digest(); return Boolean(ADMIN_TOKEN && given) && timingSafeEqual(sha(given), sha(ADMIN_TOKEN)); };
+const gate = (req, res, next) => (unlocked(req.sid) || isOwner(req) ? next() : locked(res));
 
 // Owner gate: x-gloo-admin must equal ADMIN_TOKEN. 401 without a header, 403 on a mismatch, 503 when the server has no token.
 const admin = (req, res, next) => {
@@ -573,10 +575,11 @@ app.post("/api/admin/lessons/:id/review", admin, wrap(async (req, res) => {
   res.json(adminView(saved));
 }));
 
-// Accept the chosen proposals as one new version (editor "reviewer via <who>"), clearing every proposal.
+// Accept the chosen proposals as one new version (editor "reviewer via <who>"), clearing every proposal
+// unless { keep_rest: true }, which leaves the others pending.
 app.post("/api/admin/lessons/:id/proposals/accept", admin, wrap(async (req, res) => {
   let doc;
-  try { doc = await lessons.acceptProposals(req.params.id, req.body?.paths, { editor: `reviewer via ${req.editor}` }); } catch (e) { return lessonErrors(e, res); }
+  try { doc = await lessons.acceptProposals(req.params.id, req.body?.paths, { editor: `reviewer via ${req.editor}`, keepRest: req.body?.keep_rest === true }); } catch (e) { return lessonErrors(e, res); }
   await refreshContent();
   res.json(adminView(doc));
 }));

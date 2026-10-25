@@ -34,6 +34,58 @@ number or choice.
   it by hand. Proposals wait on the lesson until you decide, through any client,
   and never reach learners.
 
+## Ambient mode
+
+`/edit` opens in its ambient mode once the token is in: the lesson as a grid of
+fields under a camera (the design study in `web/public/design/ambient/`, built
+in `web/src/edit/Ambient.jsx` with its pure parts in `web/src/edit/ambient/`).
+The grid shows the word (title, say, summary), one column per piece (part,
+sounds-like, meaning, pick question, four option names) and one per practice
+prompt (question, hint, answer). The camera opens on the whole map, waits a
+beat, then flies to the first field worth a look and shows one proposal in the
+accent color with "was …" underneath. A far move pulls out and settles in two
+stages; neighbours dim and blur. The dots under the stage are the queue; the
+words across the top are the taste ribbon. **list** at the top right opens the
+field list (`/edit?mode=list`), which has an **Ambient** link back; the list
+stays the place for everything the grid does not show (IPA, Wikipedia titles,
+connection lines, definition, accept lists, versions).
+
+**The queue.** Pending reviewer proposals first (fixes, then improvements, in
+grid order), then the fields the console flags on its own (an empty sounds-like,
+hint or respelling; a spoken line that is long or carries symbols). Proposals
+whose path is off the grid are counted in the whisper ("1 more in the list") and
+left for list mode. With no pending list, **review** on the map runs
+`POST …/review` and fills the queue; **review again** reruns it.
+
+**In focus.** The candidates for a field are the pending proposals for its
+path, ranked by the taste profile, plus whatever the owner asks for: an
+instruction ("shorter", "lead with the sound", "make it funnier") calls
+`POST …/suggest` for that field and puts the answer first. Any other short
+phrase is the field's new text.
+
+| Say, type, press or swipe | Does |
+| --- | --- |
+| keep · yes · that one · Enter · tap the field | applies the candidate: one `accept` of that proposal with `keep_rest` (the others stay pending), or one PATCH; the new version shows in a toast |
+| next · skip · no · → · swipe left | lowers the candidate's tags and shows another; with nothing else to show, moves on |
+| back · ← · swipe right | the previous field in the queue |
+| undo | a PATCH restoring the previous text (another version), and flies back to it |
+| map · Escape · swipe down | the whole lesson |
+| review | runs the reviewer |
+| a letter key, or the mic released with nothing heard | opens the draft box (typing is the owner's fallback) |
+
+Hold the mic to talk: server speech when the server has it (`/api/transcribe`,
+which the owner token opens without a passcode), the browser's recognition
+otherwise. Nothing is spoken back; this is the owner working.
+
+**Taste, live.** The profile is a list of `{ tag, weight, source }` seeded with
+`short`, `sound`, `plain`; a keep raises the kept candidate's tags, a next lowers
+them, an instruction adds its own tag ("funnier" → `fun`), a replacement adds
+`own words`. Reviewer proposals carry tags read off them (`rule` for a fix,
+`improve`, and `short` or `sound` when the reason or the length says so). It is
+kept per browser in `localStorage` (`gloo_editor_taste`) and shown on the
+**taste** panel. No Qloo call is made; these tags are the editor's signals and
+become Qloo signals when the taste layer returns.
+
 ## The reviewer
 
 `server/src/reviewer.mjs` reviews one lesson in two passes and ends in proposals,
@@ -59,13 +111,15 @@ named in the `notes`.
 ## Reviewing through the API
 
 All routes need the header `x-gloo-admin: <ADMIN_TOKEN>` (401 without it, 403 on a
-mismatch, 503 when the server has no token). An optional `x-gloo-editor` header
+mismatch, 503 when the server has no token). The same header also opens the
+passcode-gated routes (`/api/transcribe`, `/api/say`), so the console's voice
+works for the owner without unlocking the demo. An optional `x-gloo-editor` header
 names who made the edit (default `owner`).
 
 | Route | Does |
 | --- | --- |
 | `POST /api/admin/lessons/:id/review` | `{ instruction? }` → the lesson with `pending { created_at, by, instruction, proposals, notes }`; no version change |
-| `POST /api/admin/lessons/:id/proposals/accept` | `{ paths: [...] }` applies those proposals as one PATCH (new version, editor `reviewer via <x-gloo-editor>`) and clears the rest; 400 for an unknown path or one without a replacement |
+| `POST /api/admin/lessons/:id/proposals/accept` | `{ paths: [...], keep_rest? }` applies those proposals as one PATCH (new version, editor `reviewer via <x-gloo-editor>`) and clears the rest, or with `keep_rest: true` leaves the rest pending; 400 for an unknown path or one without a replacement |
 | `POST /api/admin/lessons/:id/proposals/discard` | clears `pending` |
 | `POST /api/admin/lessons/draft` | `{ word, id? }` drafts a new shared lesson with the lesson agent and stores it `provisional` (201); 409 if the id exists |
 
@@ -104,7 +158,7 @@ starts the same server by hand.
 | `POST /api/admin/lessons/:id/suggest` | `{ field, instruction? }` → `{ current, suggestion, reason, saved: false }` |
 | `POST /api/admin/lessons/:id/promote` | copies a learner's provisional draft (`p-…`) into the shared store as `provisional`; body `{ id? }` names the new slug (default: the word) |
 | `POST /api/admin/lessons/:id/review` | reviews the lesson; stores `pending` proposals (above) |
-| `POST /api/admin/lessons/:id/proposals/accept` | `{ paths }` → one new version from the chosen proposals |
+| `POST /api/admin/lessons/:id/proposals/accept` | `{ paths, keep_rest? }` → one new version from the chosen proposals; the rest cleared, or kept pending with `keep_rest` |
 | `POST /api/admin/lessons/:id/proposals/discard` | clears the proposals |
 | `POST /api/admin/lessons/draft` | `{ word, id? }` → a new provisional lesson from the lesson agent |
 

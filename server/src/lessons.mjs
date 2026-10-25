@@ -412,7 +412,8 @@ export function createLessonStore({ media, db = new DatabaseSync(":memory:"), se
       return save(pending ? { ...rest, pending } : rest);
     },
     // Apply the chosen proposals as one patch (one new version), then clear every proposal.
-    async acceptProposals(id, paths, { editor = "reviewer" } = {}) {
+    // keepRest: the proposals not chosen stay pending (the ambient console accepts one at a time).
+    async acceptProposals(id, paths, { editor = "reviewer", keepRest = false } = {}) {
       const doc = docs.get(id);
       if (!doc) throw new LessonError("NOT_FOUND", `no lesson ${id}`);
       const proposals = doc.pending?.proposals ?? [];
@@ -431,8 +432,10 @@ export function createLessonStore({ media, db = new DatabaseSync(":memory:"), se
       const { packet, changed, problems: applyProblems } = applyPatch(doc, patch);
       applyProblems.push(...validatePacket(packet));
       if (applyProblems.length) throw new LessonError("INVALID", "the lesson didn't validate", applyProblems);
-      const { pending: _p, ...base } = doc;
-      return save(next(base, { editor, changed, packet }));
+      const { pending, ...base } = doc;
+      const rest = proposals.filter((p) => !chosen.includes(p.path));
+      const kept = keepRest && rest.length ? { ...pending, proposals: rest } : null;
+      return save(next(kept ? { ...base, pending: kept } : base, { editor, changed, packet }));
     },
     async discardProposals(id) { return store.setPending(id, null); },
 

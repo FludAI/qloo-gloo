@@ -38,6 +38,7 @@ export default function Edit() {
       <header className="flex flex-wrap items-center gap-3">
         <span className="font-mono text-xs text-paper/60">gloo.news · lessons</span>
         <span className="ml-auto flex gap-2">
+          <a className="btn-ghost" href={`/edit${id ? `?id=${encodeURIComponent(id)}` : ""}`}>Ambient</a>
           <a className="btn-ghost" href="/">Learner app</a>
           <button className="btn-ghost" onClick={() => { writeToken(""); setToken(""); setLessons(null); }}>Forget token</button>
         </span>
