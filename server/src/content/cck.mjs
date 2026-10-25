@@ -39,7 +39,7 @@ export const cck = {
     { label: "NCBI: cytokinesis", url: "https://www.ncbi.nlm.nih.gov/books/NBK26831/" },
   ],
   roles: [
-    { id: "chole", label: "chole = bile", part: "chole", say: "koh-lee", meaning: "bile", sound_like: "cola", target: "the sound “koh-lih” / chole", look_for: "something that sounds like “cola / chole”",
+    { id: "chole", label: "chole = bile", part: "chole", say: "cola", meaning: "bile", sound_like: "cola", target: "the sound “koh-lih” / chole", look_for: "something that sounds like “cola / chole”",
       pick: { question: "Say your favorite cola.", options: [
         { name: "Coca-Cola", wiki: "Coca-Cola", say: ["coke", "coca cola", "coca"], qloo: { entity: "Coca-Cola", type: "brand" }, connection: "Coca-Cola ≈ chole (approximate sound). Chole means bile." },
         { name: "Pepsi-Cola", wiki: "Pepsi", say: ["pepsi"], qloo: { entity: "Pepsi", type: "brand" }, connection: "Pepsi-Cola ≈ chole (approximate sound). Chole means bile." },

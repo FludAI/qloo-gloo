@@ -51,8 +51,9 @@ before(async () => {
     env: { ...process.env, PORT: String(PORT), DB_PATH: ":memory:", ANTHROPIC_API_KEY: "test-not-a-key", ANTHROPIC_BASE_URL: "http://localhost:8798" },
     stdio: "ignore",
   });
-  for (let i = 0; i < 50; i++) {
-    try { await fetch(`http://localhost:${PORT}/api/terms`); return; } catch { await new Promise((r) => setTimeout(r, 100)); }
+  // A cold start on Windows can take several seconds; wait up to 30 s.
+  for (let i = 0; i < 150; i++) {
+    try { await fetch(`http://localhost:${PORT}/api/terms`); return; } catch { await new Promise((r) => setTimeout(r, 200)); }
   }
 });
 after(() => { proc?.kill(); fake?.close(); });
