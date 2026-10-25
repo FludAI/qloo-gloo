@@ -2,6 +2,7 @@
 // Both are labeled wherever they appear. Neither is ever presented as reviewed content.
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL } from "./agent.mjs";
+import { arr } from "./lessons.mjs";
 
 const live = () => Boolean(process.env.ANTHROPIC_API_KEY);
 // Current models reject forced tool choice, so the instruction asks for the tool and we check for it.
@@ -39,7 +40,7 @@ const LESSON_TOOL = {
     title: { type: "string" },
     pronunciation_approx: { type: "string", description: "Approximate learner respelling, e.g. koh-lih-sis-tuh-KY-nin" },
     pronunciation_ipa: { type: "string", description: "IPA for the whole term as spoken in US English, no slashes, e.g. ˌkoʊlɪˌsɪstoʊˈkaɪnɪn" },
-    summary: { type: "string", description: "One or two sentences. Use the meaning already inside the word if it has parts." },
+    summary: { type: "string", description: "One or two sentences. If the term is built from real morphemes, you may open with the meaning inside the word; otherwise lead with the sound hook, then the meaning." },
     definition: { type: "string" },
     components: { type: "array", maxItems: 5, items: { type: "object", properties: {
       part: { type: "string" }, meaning: { type: "string" }, cue: { type: "string", description: "Optional approximate sound cue, marked as approximate" } },
@@ -76,31 +77,17 @@ const LESSON_TOOL = {
   }, required: ["title", "summary", "definition", "roles", "prompts"] },
 };
 
-// The model occasionally returns an array field as a JSON string; read it either way.
-const arr = (x) => {
-  if (Array.isArray(x)) return x;
-  if (typeof x === "string") { try { const v = JSON.parse(x); return Array.isArray(v) ? v : []; } catch { return []; } }
-  return [];
-};
-const esc = (s) => String(s).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const anyOf = (words) => new RegExp(words.filter(Boolean).map(esc).join("|"));
 const clip = (s, n) => String(s ?? "").slice(0, n);
 // IPA from the model: letters, IPA symbols, stress and length marks only; slashes and brackets dropped; null when empty.
 const ipa = (s) => { const v = String(s ?? "").replace(/[/[\]]/g, "").replace(/[^\p{L}\p{M}ˈˌːˑ.‿ ]/gu, "").trim().slice(0, 60); return v || null; };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "role";
 
-// Turn model JSON into a packet with compiled rubrics (stored as JSON, compiled on load).
-export function compilePacket(json) {
-  const prompts = arr(json.prompts).map((p) => ({
-    ...p,
-    rubric: p.type === "text" ? {
-      all: arr(p.accept_all).filter((g) => g?.length).map(anyOf),
-      any: arr(p.accept_any).length ? [anyOf(arr(p.accept_any))] : [],
-    } : undefined,
-    misconceptions: arr(p.misconceptions).map((m) => [anyOf(arr(m.keywords)), m.feedback]),
-  }));
-  return { ...json, prompts };
-}
+// Packets are stored as JSON with accept lists and compiled on load; the compiler lives with the store.
+export { compilePacket } from "./lessons.mjs";
+
+// The same rule for every draft and every suggestion. "The word already contains its meaning" was the fixed
+// opening line of the sample lessons; it is true of cholecystokinin and false of most words.
+export const TRUTH_RULE = `Truthfulness about word parts: claim that "the word already contains its meaning" (or that its parts carry its meaning) only when the term is built from real morphemes whose meanings you can name (chole = bile, cyst = sac, kin = movement). For an eponym, a loanword, a brand or a word whose pieces are only sounds, never make that claim: lead the summary with the sound hook (what the pieces sound like, so the learner can say it) and then state the meaning plainly. Sound cues are approximate memory aids, never etymology; say "approximate" for sound links.`;
 
 function shape(id, input, d, origin) {
   const components = arr(d.components).slice(0, 5).map((c) => ({ part: clip(c.part, 30), meaning: clip(c.meaning, 80), cue: c.cue ? clip(c.cue, 120) : "—" }));
@@ -139,6 +126,7 @@ export async function draftLesson(id, word) {
   const d = await forced(
     `You draft provisional lessons for Gloo, which teaches hard terms by first using the meaning already inside them (roots, parts, origin), then linking parts to familiar cues.
 Be accurate. If the term has meaningful parts, list them. Sound cues are approximate memory aids, never etymology.
+${TRUTH_RULE}
 Each role needs a favorite-pick: a question like "Which cola is yours?" and 3-4 well-known public names that all carry that part's sound or meaning, so whichever one the learner picks works as the cue.
 Practice prompts: short, answerable, deterministic. Text prompts need keyword rubrics (lowercase stems that a correct answer must contain). Number prompts need an exact expected value.
 Only cite sources you are confident exist (major dictionaries, NIH/NCBI, Wikipedia). It is fine to cite none.
@@ -161,4 +149,24 @@ export function syntheticLesson(id, word) {
         pick: { question: "Which one carries the meaning?", options: [{ name: "Option A", connection: "SYNTHETIC option." }, { name: "Option B", connection: "SYNTHETIC option." }, { name: "Option C", connection: "SYNTHETIC option." }] } }],
     prompts: [{ skill: "meaning", type: "text", question: `Spell the word you glued.`, accept_any: [word.toLowerCase()], answer: word }],
   }, "synthetic");
+}
+
+// ---- One-field suggestions for the owner console: the AI proposes, a person decides, nothing is saved here ----
+const SUGGEST_TOOL = {
+  name: "suggest_field",
+  description: "A proposed replacement for one field of a lesson. It is shown to the owner as a suggestion; nothing is saved.",
+  input_schema: { type: "object", properties: {
+    value: { type: "string", description: "The new value for the field, and nothing else: the same kind of content as the current value" },
+    reason: { type: "string", description: "One sentence: what changed and why" } }, required: ["value", "reason"] },
+};
+export async function suggestField({ packet, field, current, instruction }) {
+  const out = await forced(
+    `You help the owner of Gloo edit one field of a lesson. Gloo teaches hard words to people who cannot yet say them: it speaks every line aloud, shows almost no text, and teaches the sound pieces before the meaning.
+Keep lines short and natural when read aloud. A respelling stays a respelling; IPA stays IPA for US English with no slashes or brackets; a pick question stays a short spoken question; a rubric keyword list stays a list.
+Be accurate; do not invent sources or etymology.
+${TRUTH_RULE}`,
+    `Lesson (JSON):\n${JSON.stringify(packet)}\n\nField to rewrite: ${field}\nCurrent value: ${JSON.stringify(current)}\n${instruction ? `Owner's instruction: ${instruction}` : "No instruction given: improve accuracy and clarity; keep the meaning and length."}`,
+    SUGGEST_TOOL,
+  );
+  return { value: clip(out.value, 1000), reason: clip(out.reason, 300) };
 }

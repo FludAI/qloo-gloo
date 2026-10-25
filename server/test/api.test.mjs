@@ -26,8 +26,17 @@ before(async () => {
         return res.end(JSON.stringify({ audioContent: Buffer.from(`MP3|${parsed.voice?.name}|${parsed.input?.ssml}`).toString("base64") }));
       }
       const offered = (parsed.tools ?? []).map((t) => t.name);
-      const forcedTool = ["resolve_term", "draft_lesson", "read_word"].find((n) => offered.includes(n));
+      const forcedTool = ["resolve_term", "draft_lesson", "read_word", "suggest_field"].find((n) => offered.includes(n));
       res.setHeader("content-type", "application/json");
+      if (forcedTool === "suggest_field") {
+        // Echo what was asked, so the test can check the field, the current value and the instruction reached the model.
+        const user = String(parsed.messages?.[0]?.content ?? "");
+        const field = /Field to rewrite: (\S+)/.exec(user)?.[1];
+        const instruction = /Owner's instruction: (.+)/.exec(user)?.[1] ?? "";
+        assert.equal(parsed.tool_choice?.type, "auto");
+        assert.ok(String(parsed.system).includes("already contains its meaning"), "truthfulness rule in the system prompt");
+        return res.end(JSON.stringify(reply([{ type: "tool_use", id: "s1", name: "suggest_field", input: { value: `Suggested ${field}${instruction ? ` (${instruction})` : ""}`, reason: "test" } }])));
+      }
       if (forcedTool === "read_word") {
         return res.end(JSON.stringify(reply([{ type: "tool_use", id: "v1", name: "read_word", input: { word: "Cholecystokinin", alternatives: ["gallbladder"], confidence: "high" } }])));
       }
@@ -58,7 +67,8 @@ before(async () => {
   }).listen(8798);
   proc = spawn(process.execPath, [SERVER, "--mock"], {
     env: { ...process.env, PORT: String(PORT), DB_PATH: ":memory:", ANTHROPIC_API_KEY: "test-not-a-key", ANTHROPIC_BASE_URL: "http://localhost:8798",
-      TTS_ENDPOINT: "http://localhost:8798/tts", MEDIA_LOCAL: "1", MEDIA_DIR: mkdtempSync(join(tmpdir(), "gloo-api-media-")), LIMIT_TTS_PER_SESSION_HOUR: "2" },
+      TTS_ENDPOINT: "http://localhost:8798/tts", MEDIA_LOCAL: "1", MEDIA_DIR: mkdtempSync(join(tmpdir(), "gloo-api-media-")), LIMIT_TTS_PER_SESSION_HOUR: "2",
+      ADMIN_TOKEN: "test-owner-token" },
     stdio: "ignore",
   });
   // A cold start on Windows can take several seconds; wait up to 30 s.
@@ -282,4 +292,103 @@ test("say: the server speaks the pieces from IPA, once; hits are free of the lim
   assert.equal((await raw("/api/say/verify", { text: "never played", term_id: "cholecystokinin", verified: true }, cookie)).status, 404);
   assert.equal((await raw("/api/say", { text: "", term_id: "cholecystokinin" }, cookie)).status, 400);
   assert.equal((await raw("/api/say", { text: "x", term_id: "no-such-term" }, cookie)).status, 404);
+});
+
+// ---- Owner API: the lesson store behind ADMIN_TOKEN ----
+const owner = (token = "test-owner-token") => async (method, path, body, extra = {}) => {
+  const res = await fetch(`http://localhost:${PORT}${path}`, {
+    method, headers: { ...(token && { "x-gloo-admin": token }), ...extra, ...(body && { "content-type": "application/json" }) },
+    body: body && JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json() };
+};
+
+test("owner: 401 without the header, 403 with the wrong token, 200 with the right one", async () => {
+  assert.equal((await owner("")("GET", "/api/admin/lessons")).status, 401);
+  assert.equal((await owner("not-it")("GET", "/api/admin/lessons")).status, 403);
+  assert.equal((await owner("not-it")("PATCH", "/api/admin/lessons/cholecystokinin", { summary: "x" })).status, 403);
+  const { status, body } = await owner()("GET", "/api/admin/lessons");
+  assert.equal(status, 200);
+  assert.deepEqual(body.map((l) => [l.id, l.review_status, l.version]), [["brier-score", "reviewed", 1], ["cholecystokinin", "reviewed", 1]]);
+  const full = (await owner()("GET", "/api/admin/lessons/cholecystokinin")).body;
+  assert.equal(full.prompts[0].answer, "Bile."); // the owner sees answers; learners never do
+  assert.deepEqual(full.history, []);
+  assert.equal((await owner()("GET", "/api/admin/lessons/nope")).status, 404);
+  assert.equal((await session()("GET", "/api/health")).body.admin, true);
+});
+
+test("owner: a PATCH bumps the version, is validated, and reaches the learner app at once", async () => {
+  const o = owner(), s = session();
+  const bad = await o("PATCH", "/api/admin/lessons/cholecystokinin", { title: "", roles: [{ id: "chole", ipa: "/koʊli/" }] });
+  assert.equal(bad.status, 400);
+  assert.ok(bad.body.problems.some((p) => p.startsWith("title:")) && bad.body.problems.some((p) => p.startsWith("roles[0].ipa:")));
+  const ok = await o("PATCH", "/api/admin/lessons/cholecystokinin", {
+    summary: "Chole (bile) + cysto (sac) + kin (movement): the hormone that makes the bile sac move.",
+    roles: [{ id: "chole", meaning: "bile (gall)", say: "koh-lee" }],
+    prompts: [{ id: "cck-chole", hint: "Cola ≈ chole, approximately.", accept_any: ["bile", "gall"] }],
+  }, { "x-gloo-editor": "loren" });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.version, 2);
+  assert.equal(ok.body.edited_by, "loren");
+  assert.equal(ok.body.history.length, 1);
+  assert.ok(!("packet" in ok.body.history[0]), "snapshots stay in the store");
+  // The learner app sees the new version without a restart.
+  const listed = (await s("GET", "/api/terms")).body.find((t) => t.id === "cholecystokinin");
+  assert.equal(listed.version, 2);
+  assert.match(listed.summary, /^Chole \(bile\)/);
+  await s("POST", "/api/terms/cholecystokinin/first-attempt", { skipped: true });
+  const term = (await s("GET", "/api/terms/cholecystokinin")).body;
+  assert.equal(term.version, 2);
+  assert.equal(term.roles[0].meaning, "bile (gall)");
+  assert.equal(term.roles[0].say, "koh-lee");
+  assert.ok(!JSON.stringify(term).includes('"answer"'));
+  assert.equal((await s("POST", "/api/practice/hint", { prompt_id: "cck-chole" })).body.hint, "Cola ≈ chole, approximately.");
+  const r = (await s("POST", "/api/attempts", { prompt_id: "cck-chole", response: "gall", idempotency_key: "owner-edit-gall-1" })).body;
+  assert.equal(r.outcome, "correct"); // the edited rubric scores
+  const prog = (await s("GET", "/api/export")).body.attempts.at(-1);
+  assert.equal(String(prog.content_version), "2");
+});
+
+test("owner: suggest asks the model with the field and instruction and saves nothing", async () => {
+  const o = owner();
+  const before = (await o("GET", "/api/admin/lessons/brier-score")).body;
+  const r = await o("POST", "/api/admin/lessons/brier-score/suggest", { field: "roles.sound.meaning", instruction: "shorter" });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.current, "the name of the score");
+  assert.equal(r.body.suggestion, "Suggested roles.sound.meaning (shorter)");
+  assert.equal(r.body.saved, false);
+  assert.equal((await o("GET", "/api/admin/lessons/brier-score")).body.version, before.version);
+  assert.equal((await o("POST", "/api/admin/lessons/brier-score/suggest", { field: "roles" })).status, 400);
+  assert.equal((await o("POST", "/api/admin/lessons/brier-score/suggest", { field: "nope.x" })).status, 400);
+  assert.equal((await o("POST", "/api/admin/lessons/nope/suggest", { field: "summary" })).status, 404);
+});
+
+test("owner: a learner's draft is promoted into the shared store as provisional, then published", async () => {
+  const o = owner(), learner = session(), other = session();
+  const { body: glued } = await learner("POST", "/api/glue", { text: "peristalsis", mode: "typed" });
+  assert.equal(glued.created, true);
+  assert.equal((await o("POST", "/api/admin/lessons/p-ffffffffff/promote")).status, 404);
+  const p = await o("POST", `/api/admin/lessons/${glued.term_id}/promote`, {}, { "x-gloo-editor": "loren" });
+  assert.equal(p.status, 201, JSON.stringify(p.body));
+  assert.equal(p.body.id, "peristalsis");
+  assert.equal(p.body.review_status, "provisional");
+  assert.equal(p.body.promoted_from.provisional_id, glued.term_id);
+  assert.equal((await o("POST", `/api/admin/lessons/${glued.term_id}/promote`)).status, 409);
+  // Everyone sees it now, labeled as a draft; the learner's own copy is untouched.
+  const seen = (await other("GET", "/api/terms")).body.find((t) => t.id === "peristalsis");
+  assert.equal(seen.provisional, true);
+  assert.equal(seen.review_status, "provisional");
+  await other("POST", "/api/terms/peristalsis/first-attempt", { skipped: true });
+  assert.equal((await other("GET", "/api/terms/peristalsis")).body.provisional, true);
+  assert.equal((await learner("GET", `/api/terms/${glued.term_id}`)).body.locked, true);
+  // The resolver knows the new word by its title now.
+  assert.equal((await other("POST", "/api/glue", { text: "peristalsis", mode: "typed" })).body.term_id, "peristalsis");
+  const pub = await o("POST", "/api/admin/lessons/peristalsis/publish");
+  assert.equal(pub.status, 200);
+  assert.equal(pub.body.review_status, "reviewed");
+  assert.equal(pub.body.version, 2);
+  assert.equal((await other("GET", "/api/terms")).body.find((t) => t.id === "peristalsis").provisional, false);
+  const a = (await other("POST", "/api/attempts", { prompt_id: "peristalsis-q1", response: "around", idempotency_key: "promoted-q1-0001" })).body;
+  assert.equal(a.outcome, "correct");
+  assert.equal(a.provisional, false);
 });

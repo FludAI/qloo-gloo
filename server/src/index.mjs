@@ -12,10 +12,11 @@ import { take } from "./limits.mjs";
 import { db, q, exportLearner, deleteLearner } from "./db.mjs";
 import { assess } from "./assess.mjs";
 import { deriveSkill, POLICY } from "./scheduler.mjs";
-import { listTerms, getTerm, findPrompt, publicTerm, publicPrompt, addTerms } from "./content/index.mjs";
+import { listTerms, getTerm, findPrompt, publicTerm, publicPrompt, addTerms, reload as reloadContent, store as lessons } from "./content/index.mjs";
+import { ID as LESSON_ID, readField } from "./lessons.mjs";
 import { runCueAgent, runSyntheticAgent, agentMode, MODEL } from "./agent.mjs";
 import { setVocabulary, resolveLocal, pickFromOcr, normalize } from "./resolve/index.mjs";
-import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket } from "./drafter.mjs";
+import { resolveWithLlm, draftLesson, syntheticLesson, compilePacket, suggestField } from "./drafter.mjs";
 import { sttMode, transcribe, splitWake } from "./speech.mjs";
 import { readWord } from "./reader.mjs";
 import { art } from "./art.mjs";
@@ -30,6 +31,8 @@ const MOCK = process.env.QLOO_MOCK === "1" || process.argv.includes("--mock");
 const PORT = Number(process.env.PORT ?? 8787);
 // Hosted demo gate: camera, voice, the agent and lesson drafting spend money; reviewed lessons stay open.
 const PASSCODE = String(process.env.DEMO_PASSCODE ?? "").trim();
+// Owner token for the lesson API and the /edit console. Separate from the passcode; unset = owner API off.
+const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN ?? "").trim();
 
 // Optional extra terms from a module outside this repo (GLOO_ENGINE_MODULE). Absent = bundled samples only.
 let ENGINE = "gloo-open";
@@ -39,9 +42,16 @@ if (process.env.GLOO_ENGINE_MODULE) {
   ENGINE = mod.ENGINE_NAME ?? "gloo-external";
 }
 
-setVocabulary(listTerms());
+// Lessons come from the store (bucket + SQLite), seeded from content/*.mjs on the first boot. After any owner
+// edit the map, the resolver's vocabulary and the speech hints are rebuilt, so the learner app sees the new version.
 // Recognition hints for spoken capture: every lesson title and alias, the domain list, and the wake phrase.
-const SPEECH_HINTS = [...new Set(["gloo it", ...listTerms().flatMap((t) => [t.title.replace(/\s*\(.*?\)\s*/g, " ").trim(), ...(t.aliases ?? [])]), ...DOMAIN_TERMS])];
+let SPEECH_HINTS = [];
+async function refreshContent() {
+  await reloadContent();
+  setVocabulary(listTerms());
+  SPEECH_HINTS = [...new Set(["gloo it", ...listTerms().flatMap((t) => [t.title.replace(/\s*\(.*?\)\s*/g, " ").trim(), ...(t.aliases ?? [])]), ...DOMAIN_TERMS])];
+}
+await refreshContent();
 
 // A term is either a reviewed packet or this learner's own provisional draft.
 function termFor(sid, id) {
@@ -83,6 +93,17 @@ const unlocked = (sid) => !PASSCODE || Boolean(q.isUnlocked.get(sid)?.unlocked);
 const locked = (res) => res.status(401).json({ error: "This demo needs a passcode for camera, voice and the agent.", code: "PASSCODE_REQUIRED" });
 const gate = (req, res, next) => (unlocked(req.sid) ? next() : locked(res));
 
+// Owner gate: x-gloo-admin must equal ADMIN_TOKEN. 401 without a header, 403 on a mismatch, 503 when the server has no token.
+const admin = (req, res, next) => {
+  if (!ADMIN_TOKEN) return res.status(503).json({ error: "The owner API isn't configured on this server (ADMIN_TOKEN).", code: "ADMIN_UNAVAILABLE" });
+  const given = String(req.headers["x-gloo-admin"] ?? "").trim();
+  if (!given) return res.status(401).json({ error: "Owner token required.", code: "ADMIN_TOKEN_REQUIRED" });
+  const h = (s) => createHash("sha256").update(s).digest();
+  if (!timingSafeEqual(h(given), h(ADMIN_TOKEN))) return res.status(403).json({ error: "That token didn't match.", code: "ADMIN_TOKEN_WRONG" });
+  req.editor = String(req.headers["x-gloo-editor"] ?? "owner").trim().slice(0, 60) || "owner";
+  next();
+};
+
 const blocked = (summary, code, recovery) =>
   ({ status: "error", summary, results: [], result_count: 0, error: { code, retryable: false, recovery } });
 
@@ -111,7 +132,7 @@ app.get("/api/health", wrap(async (req, res) => {
   const stt = MOCK ? "mock" : await sttMode();
   const [tts, mediaMode] = await Promise.all([ttsMode(), media.mode()]);
   res.json({ qloo, agent, stt, tts, voice: tts === "google" ? VOICE : null, media: mediaMode, camera: agentMode() === "live" ? "live" : MOCK ? "mock" : "unavailable",
-    gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), engine: ENGINE, schedule_policy: POLICY.version,
+    gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), admin: Boolean(ADMIN_TOKEN), lessons: listTerms().length, engine: ENGINE, schedule_policy: POLICY.version,
     unavailable: ["pronunciation scoring", "glasses input", "rewards", "encounter detection"] });
 }));
 
@@ -126,7 +147,7 @@ app.post("/api/unlock", (req, res) => {
 
 // ---- Terms (no answers ever leave the server) ----
 app.get("/api/terms", (req, res) => res.json([
-  ...listTerms().map((t) => ({ id: t.id, title: t.title, summary: t.summary, provisional: false })),
+  ...listTerms().map((t) => ({ id: t.id, title: t.title, summary: t.summary, provisional: Boolean(t.provisional), version: t.version, review_status: t.review.status })),
   ...q.provisionalFor.all(req.sid).map((r) => { const p = JSON.parse(r.packet); return { id: r.id, title: p.title, summary: p.summary, provisional: true, origin: r.origin }; }),
 ]));
 
@@ -148,7 +169,7 @@ app.post("/api/terms/:id/first-attempt", (req, res) => {
   if (!skipped && !response.trim()) return res.status(400).json({ error: "response or skipped is required" });
   // Background signal: which sound pieces the attempt carried. Stored, not shown yet.
   const pieces = skipped ? null : scorePieces(termPieces(t), response);
-  q.putFirst.run(req.sid, t.id, response, skipped ? 1 : 0, t.version, Date.now(), pieces ? JSON.stringify(pieces) : null);
+  q.putFirst.run(req.sid, t.id, response, skipped ? 1 : 0, String(t.version), Date.now(), pieces ? JSON.stringify(pieces) : null);
   res.json({ saved: true, pieces });
 });
 
@@ -326,7 +347,7 @@ app.post("/api/glue", wrap(async (req, res) => {
   // Spoken capture of a word doubles as the first attempt, saved before anything is shown.
   if (mode === "voice" && captured === "voice" && !q.getFirst.get(req.sid, termId)) {
     const t = termFor(req.sid, termId);
-    q.putFirst.run(req.sid, termId, `voice capture: "${text}" (speech-to-text transcript, not a pronunciation score)`, 0, t.version, Date.now(),
+    q.putFirst.run(req.sid, termId, `voice capture: "${text}" (speech-to-text transcript, not a pronunciation score)`, 0, String(t.version), Date.now(),
       JSON.stringify(scorePieces(termPieces(t), text)));
   }
   res.json({ term_id: termId, created, transcript,
@@ -395,7 +416,7 @@ app.post("/api/attempts", (req, res) => {
   const independent = result.outcome === "correct" && !hinted;
   try {
     db.exec("BEGIN IMMEDIATE");
-    q.insertAttempt.run(req.sid, term.id, prompt.id, prompt.skill, response, result.outcome, hinted ? 1 : 0, independent ? 1 : 0, term.version, term.review.status, idem, Date.now());
+    q.insertAttempt.run(req.sid, term.id, prompt.id, prompt.skill, response, result.outcome, hinted ? 1 : 0, independent ? 1 : 0, String(term.version), term.review.status, idem, Date.now());
     q.consumeHints.run(req.sid, prompt.id);
     db.exec("COMMIT");
   } catch (e) {
@@ -469,6 +490,73 @@ app.get("/api/art", wrap(async (req, res) => {
   res.setHeader("content-type", a.mime);
   res.setHeader("cache-control", "public, max-age=86400");
   res.end(Buffer.from(a.bytes));
+}));
+
+// ---- Owner API: the lesson store behind ADMIN_TOKEN. The AI drafts and suggests; a person decides. ----
+// The stored history keeps full snapshots; the API returns the version list without them.
+const adminView = (doc) => ({ ...doc, history: (doc.history ?? []).map(({ packet, ...h }) => h) });
+const lessonErrors = (e, res) => {
+  if (e?.code === "NOT_FOUND") return res.status(404).json({ error: "unknown lesson" });
+  if (e?.code === "EXISTS") return res.status(409).json({ error: e.message });
+  if (e?.code === "INVALID") return res.status(400).json({ error: e.message, problems: e.problems ?? [] });
+  throw e;
+};
+
+app.get("/api/admin/lessons", admin, (req, res) => res.json(lessons.summaries()));
+
+app.get("/api/admin/lessons/:id", admin, (req, res) => {
+  const doc = lessons.get(req.params.id);
+  if (!doc) return res.status(404).json({ error: "unknown lesson" });
+  res.json(adminView(doc));
+});
+
+// JSON merge patch: top-level fields, and roles / prompts / pick options addressed by id or index. One version per call.
+app.patch("/api/admin/lessons/:id", admin, wrap(async (req, res) => {
+  let doc;
+  try { doc = await lessons.patch(req.params.id, req.body ?? {}, { editor: req.editor }); } catch (e) { return lessonErrors(e, res); }
+  await refreshContent();
+  res.json(adminView(doc));
+}));
+
+app.post("/api/admin/lessons/:id/publish", admin, wrap(async (req, res) => {
+  let doc;
+  try { doc = await lessons.publish(req.params.id, { editor: req.editor }); } catch (e) { return lessonErrors(e, res); }
+  await refreshContent();
+  res.json(adminView(doc));
+}));
+
+// A learner's provisional draft (p-...) becomes a shared lesson, labeled provisional for everyone until published.
+app.post("/api/admin/lessons/:id/promote", admin, wrap(async (req, res) => {
+  const row = q.provisionalAnyById.get(req.params.id);
+  if (!row) return res.status(404).json({ error: "unknown provisional lesson" });
+  const packet = JSON.parse(row.packet);
+  const id = String(req.body?.id ?? normalize(row.word).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")).slice(0, 60);
+  if (!LESSON_ID.test(id)) return res.status(400).json({ error: "id: lowercase letters, digits and dashes", problems: [`id: must match ${LESSON_ID}`] });
+  let doc;
+  try { doc = await lessons.promote(packet, { id, editor: req.editor, origin: row.origin, from: row.id }); } catch (e) { return lessonErrors(e, res); }
+  await refreshContent();
+  res.status(201).json(adminView(doc));
+}));
+
+// Ask the AI for one field. Returns a proposal only; the owner accepts it into a PATCH or discards it.
+app.post("/api/admin/lessons/:id/suggest", admin, wrap(async (req, res) => {
+  const doc = lessons.get(req.params.id);
+  if (!doc) return res.status(404).json({ error: "unknown lesson" });
+  const field = String(req.body?.field ?? "").trim().slice(0, 120);
+  const current = readField(doc, field);
+  if (!field || typeof current !== "string") return res.status(400).json({ error: "field must name a text field of the lesson, e.g. summary or roles.chole.meaning", field });
+  const instruction = String(req.body?.instruction ?? "").trim().slice(0, 600) || null;
+  if (agentMode() !== "live") return res.status(503).json({ error: "The lesson agent isn't configured on this server.", code: "AGENT_UNAVAILABLE" });
+  const t0 = performance.now();
+  try {
+    const out = await suggestField({ packet: adminView({ ...doc, history: [] }), field, current, instruction });
+    q.logCall.run(req.sid, "anthropic", "suggest_field", "ok", null, performance.now() - t0, Date.now());
+    res.json({ field, current, suggestion: out.value, reason: out.reason, saved: false });
+  } catch (e) {
+    q.logCall.run(req.sid, "anthropic", "suggest_field", "error", null, performance.now() - t0, Date.now());
+    console.error("suggest_field:", e.message);
+    res.status(502).json({ error: "The model didn't answer. Try again.", code: "SUGGEST_FAILED" });
+  }
 }));
 
 // ---- Learner data controls ----

@@ -19,10 +19,11 @@ gcloud storage buckets create gs://gloo-media-bondswipe --location $REGION --uni
 printf "Qloo key: " && read -s K && printf %s "$K" | gcloud secrets create qloo-api-key --data-file=- && unset K; echo
 printf "Anthropic key: " && read -s K && printf %s "$K" | gcloud secrets create anthropic-api-key --data-file=- && unset K; echo
 printf "Demo passcode: " && read -s K && printf %s "$K" | gcloud secrets create gloo-demo-passcode --data-file=- && unset K; echo
+printf "Admin token: " && read -s K && printf %s "$K" | gcloud secrets create gloo-admin-token --data-file=- && unset K; echo
 
 # Let Cloud Run's runtime account read them
 SA=$(gcloud projects describe $PROJECT --format='value(projectNumber)')-compute@developer.gserviceaccount.com
-for s in qloo-api-key anthropic-api-key gloo-demo-passcode; do
+for s in qloo-api-key anthropic-api-key gloo-demo-passcode gloo-admin-token; do
   gcloud secrets add-iam-policy-binding $s --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor
 done
 ```
@@ -32,7 +33,7 @@ done
 ```bash
 gcloud run deploy qloo-gloo --source . --region $REGION \
   --allow-unauthenticated \
-  --set-secrets QLOO_API_KEY=qloo-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,DEMO_PASSCODE=gloo-demo-passcode:latest \
+  --set-secrets QLOO_API_KEY=qloo-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,DEMO_PASSCODE=gloo-demo-passcode:latest,ADMIN_TOKEN=gloo-admin-token:latest \
   --min-instances 1 --max-instances 1 --session-affinity \
   --memory 1Gi --cpu 1 --timeout 120
 ```
@@ -90,6 +91,17 @@ in `jar.txt` (the smoke script keeps one):
 curl -s -b jar.txt -X POST "$SMOKE_URL/api/say" -H 'content-type: application/json' -d '{"text":"chole","term_id":"cholecystokinin"}' -o chole.mp3 -D -
 ```
 
+## Lessons live in the bucket too
+
+Lesson content is a JSON packet per lesson in the same bucket, `lessons/<id>.json`
+with `lessons/index.json` naming every id (`server/src/lessons.mjs`). On the first
+boot the server seeds the store from `server/src/content/*.mjs`; after that the
+store is the source of truth and code never overwrites a stored lesson, so the
+owner's edits survive a redeploy. SQLite on the instance is only the hot cache.
+The owner edits through `/api/admin/lessons` or the `/edit` console, both behind
+`ADMIN_TOKEN` (header `x-gloo-admin`), a Secret Manager secret like the passcode.
+See `docs/EDITING.md`.
+
 ## Custom domain
 
 `gloo.news` is mapped to the service with a Cloud Run domain mapping (the domain is
@@ -131,6 +143,7 @@ Environment variables (defaults shown):
 | `MEDIA_BUCKET` | `gloo-media-bondswipe` | Cloud Storage bucket for clips and pictures |
 | `MEDIA_LOCAL` / `MEDIA_DIR` | unset | `1` forces the local folder (tests); `MEDIA_DIR` moves it |
 | `DEMO_PASSCODE` | unset | When set, camera, voice, the agent and drafting need it once per session |
+| `ADMIN_TOKEN` | unset | Owner token for `/api/admin/lessons` and `/edit` (header `x-gloo-admin`); unset = owner API off |
 
 Set a budget alert on the Anthropic account too. Qloo hackathon keys expire
 after the event; after that the demo shows "Qloo: key missing" and keeps the

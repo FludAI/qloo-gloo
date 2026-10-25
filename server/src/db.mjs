@@ -54,6 +54,8 @@ export const q = {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
   provisionalById: db.prepare("SELECT * FROM provisional_terms WHERE id = ? AND sid = ?"),
   provisionalByWord: db.prepare("SELECT * FROM provisional_terms WHERE sid = ? AND word = ?"),
+  provisionalAnyById: db.prepare("SELECT * FROM provisional_terms WHERE id = ?"), // owner promotion only; never a learner route
+
   provisionalFor: db.prepare("SELECT id, word, origin, packet FROM provisional_terms WHERE sid = ? ORDER BY created_at"),
   addProvisional: db.prepare("INSERT INTO provisional_terms (id, sid, word, origin, packet, created_at) VALUES (?, ?, ?, ?, ?, ?)"),
   logResolution: db.prepare(`INSERT INTO resolutions (sid, mode, input, resolved, term_id, method, score, decision, created_at)
