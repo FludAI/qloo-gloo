@@ -64,7 +64,7 @@ export default function Practice({ term, health, guard, onAttempt, onDone }) {
       ) : (
         <div className="mt-2">
           <PawRow n={plan.count} states={paw.states} size={plan.count > 5 ? 52 : 64} className="mb-2" label={`${plan.count} syllables`} />
-          <SayIt big health={health} guard={guard} onText={submit} onLevel={paw.onLevel} onListening={paw.onListening} label={p.type === "number" ? "Hold and say the number" : "Hold and say your answer"} />
+          <SayIt big health={health} guard={guard} promptId={p.id} onText={submit} onLevel={paw.onLevel} onListening={paw.onListening} label={p.type === "number" ? "Hold and say the number" : "Hold and say your answer"} />
         </div>
       ))}
       {!result && p.has_hint && (

@@ -88,3 +88,29 @@ export function assess(prompt, response) {
   }
   return { outcome: "incorrect", feedback: "Not quite.", answer: prompt.answer };
 }
+
+// ---- Hearing a spoken answer ----
+// A spoken answer is one or two words, and a recognizer with no context hears "bile" as "Bayou". So the
+// recognizer is told what this prompt expects: the reviewed answer, the choices, the term's own words and
+// pieces. The learner never sees these; they go to the speech service only.
+const speakable = (s) => String(s ?? "").replace(/\([^)]*\)/g, " ").replace(/[“”"]/g, "").split(/[.;:—–,]|\bor\b|\band\b/)
+  .map((x) => x.trim().replace(/^(the|a|an)\s+/i, "").toLowerCase()).filter((x) => x && x.length <= 60 && /[a-z]/.test(x));
+export function promptHints(prompt, term) {
+  if (!prompt) return [];
+  const out = [];
+  if (prompt.type === "choice") out.push(...(prompt.options ?? []).flatMap(speakable), ...speakable(prompt.expected));
+  else out.push(...speakable(prompt.answer));
+  if (term) {
+    out.push(...speakable(term.title));
+    for (const r of term.roles ?? []) { if (r.part) out.push(r.part.replace(/^-|-$/g, "").toLowerCase()); if (r.say) out.push(...speakable(r.say)); }
+  }
+  return [...new Set(out)];
+}
+
+// Among what the recognizer heard (its best guess first), the first reading the prompt accepts; else the best guess.
+// "bayou" / "bile" / "vile": the learner said bile.
+export function bestHeard(prompt, transcript, alternatives = []) {
+  const heard = [transcript, ...alternatives].map((t) => String(t ?? "").trim()).filter(Boolean);
+  if (!prompt || heard.length < 2) return heard[0] ?? "";
+  return heard.find((t) => assess(prompt, t).outcome === "correct") ?? heard[0];
+}

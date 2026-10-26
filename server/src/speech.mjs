@@ -25,14 +25,24 @@ export async function sttMode() {
   return probe;
 }
 
-// pcm16: base64 of raw 16-bit little-endian mono PCM at 16 kHz. hints: words to boost.
-export async function transcribe({ pcm16, hints = [] }) {
+// The vocabulary (every term and "gloo it") is one context; what the current prompt expects is a second,
+// stronger one, so a one-word answer like "bile" is heard as bile and not Bayou.
+export function speechContexts(hints = [], expected = []) {
+  const phrases = (xs, n) => [...new Set(xs.map((h) => String(h).trim().slice(0, 100)).filter(Boolean))].slice(0, n);
+  const out = [{ phrases: phrases(hints, 500), boost: 12 }];
+  const ex = phrases(expected, 100);
+  if (ex.length) out.push({ phrases: ex, boost: 20 });
+  return out;
+}
+
+// pcm16: base64 of raw 16-bit little-endian mono PCM at 16 kHz. hints: words to boost; expected: this prompt's answers.
+export async function transcribe({ pcm16, hints = [], expected = [] }) {
   const t = await token();
   const body = {
     config: {
       encoding: "LINEAR16", sampleRateHertz: 16000, languageCode: "en-US", model: "latest_short",
       maxAlternatives: 3, enableAutomaticPunctuation: false,
-      speechContexts: [{ phrases: hints.slice(0, 500).map((h) => String(h).slice(0, 100)), boost: 12 }],
+      speechContexts: speechContexts(hints, expected),
     },
     audio: { content: pcm16 },
   };

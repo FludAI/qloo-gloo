@@ -4,11 +4,12 @@ import { MicIcon } from "./Icons.jsx";
 
 // Hold-to-talk that yields text: server speech when available, else the browser's. Hidden when neither exists.
 // onLevel / onListening feed the syllable paw while the learner speaks (see Paw.jsx).
-export default function SayIt({ health, guard, onText, onLevel, onListening, big = false, label }) {
+// promptId: the practice prompt being answered, so the server can tell the recognizer what to expect.
+export default function SayIt({ health, guard, onText, onLevel, onListening, big = false, label, promptId }) {
   const talk = useHoldToTalk({
     stt: health?.stt,
     onPcm: ({ pcm16 }) => guard(async () => {
-      const r = await api.transcribe(pcm16);
+      const r = await api.transcribe(pcm16, promptId);
       if (!r.transcript) throw new Error("Didn't catch that. Try again.");
       onText(r.transcript);
     }),

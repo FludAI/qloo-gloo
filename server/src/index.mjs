@@ -10,7 +10,7 @@ import { toItems } from "./normalize.mjs";
 import { mockQloo } from "./mock.mjs";
 import { take } from "./limits.mjs";
 import { db, q, exportLearner, deleteLearner } from "./db.mjs";
-import { assess } from "./assess.mjs";
+import { assess, promptHints, bestHeard } from "./assess.mjs";
 import { deriveSkill, POLICY } from "./scheduler.mjs";
 import { listTerms, getTerm, findPrompt, publicTerm, publicPrompt, addTerms, reload as reloadContent, store as lessons } from "./content/index.mjs";
 import { ID as LESSON_ID, readField } from "./lessons.mjs";
@@ -180,13 +180,23 @@ app.post("/api/terms/:id/first-attempt", (req, res) => {
 app.post("/api/transcribe", gate, wrap(async (req, res) => {
   const pcm16 = String(req.body?.pcm16 ?? "");
   if (pcm16.length < 2000) return res.status(400).json({ error: "Too short. Hold the mic and say it." });
-  if (MOCK) return res.json({ transcript: "gloo it", alternatives: [], provider: "mock" });
+  if (MOCK) {
+    // The mock hears "bayou" first and the prompt's answer second, so the pick among readings is testable.
+    const found = req.body?.prompt_id ? promptFor(req.sid, String(req.body.prompt_id)) : null;
+    const alts = found ? ["bayou", String(found.prompt.answer ?? "").replace(/\.$/, "").toLowerCase()] : ["gloo it"];
+    return res.json({ transcript: found ? bestHeard(found.prompt, alts[0], alts.slice(1)) : alts[0], alternatives: alts.slice(1), provider: "mock", expected: found ? promptHints(found.prompt, found.term) : [] });
+  }
   if ((await sttMode()) !== "google") return res.status(503).json({ error: "Server speech isn't configured.", code: "STT_UNAVAILABLE" });
   const lim = take("stt", req.sid);
   if (!lim.ok) return res.status(429).json({ error: lim.reason });
   const t0 = performance.now();
   try {
-    const out = await transcribe({ pcm16, hints: SPEECH_HINTS });
+    // A practice answer names its prompt: the recognizer is told what the prompt expects, and among its
+    // readings the first the prompt accepts is the one heard. The learner never sees the hints.
+    const found = req.body?.prompt_id ? promptFor(req.sid, String(req.body.prompt_id)) : null;
+    const expected = found ? promptHints(found.prompt, found.term) : [];
+    const out = await transcribe({ pcm16, hints: SPEECH_HINTS, expected });
+    if (found) out.transcript = bestHeard(found.prompt, out.transcript, out.alternatives);
     q.logCall.run(req.sid, "google-stt", "recognize", out.transcript ? "ok" : "empty", null, performance.now() - t0, Date.now());
     res.json({ ...out, provider: "google" });
   } catch (e) {
