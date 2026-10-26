@@ -14,7 +14,7 @@ import { scorePieces } from "./resolve/pieces.mjs";
 export const PRODUCT_RULES = `Product rules for a Gloo lesson (the app speaks every line; the screen shows almost no text):
 1. ${TRUTH_RULE}
 2. Every pick option must carry the role's sound (for a sound role: its name sounds like the piece) or the role's meaning (for a meaning role: the thing plainly is or does what the piece means). Name any option that doesn't and replace it with a well-known public name that does, with its exact English Wikipedia article title for the picture.
-3. A piece's respelling (say) and its IPA must describe the same sound as the piece inside the term. IPA is US English, no slashes or brackets.
+3. A piece's respelling (say) and its IPA must describe the same sound. Normally that is the piece as said inside the term. Exception, deliberate: when a piece's say equals its sound_like, the owner has pinned the piece to its hook word (chole is spoken "cola"), and that is correct; do not propose the dictionary sound for it. IPA is US English, no slashes or brackets.
 4. Every practice answer must satisfy its own rubric: a text answer must match its accept rules, a number answer must state the expected value, a choice answer must name the expected option. Fix the answer or the rule, not the question.
 5. Minimal, speakable text: the summary is one or two short spoken sentences; pick questions are short spoken questions ("Say your favorite cola."); no symbols a voice would read badly (≈ → + = /). Hints and questions stay short.
 6. Be accurate; never invent etymology, sources or Wikipedia titles.`;
