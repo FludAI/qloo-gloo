@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import Camera from "./components/Camera.jsx";
 import Flow from "./components/Flow.jsx";
 import Passcode from "./components/Passcode.jsx";
+import AmbientGate from "./components/AmbientGate.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
@@ -86,22 +87,7 @@ export default function App() {
           </div>
         </div>
 
-        {(camState === "idle" || camState === "starting") && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-            <img src="/brand/gloo-paw-gold.svg" alt="" className="mb-6 h-24 w-auto" draggable="false" />
-            <h1 className="font-display text-5xl leading-[1.02]">Gloo works<br />through your <em className="text-gloo">camera.</em></h1>
-            <p className="mt-5 max-w-xs text-sm text-paper/70">Turn on your phone's camera and microphone, or wear your smart glasses, to continue. Point at a hard word and say “gloo it”.</p>
-            <button className="btn-light mt-8" disabled={camState === "starting"} onClick={openCamera}><CameraIcon /> {camState === "starting" ? "Opening…" : "Turn on camera and mic"}</button>
-          </div>
-        )}
-
-        {(camState === "denied" || camState === "unavailable") && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-            <h1 className="font-display text-4xl leading-tight">{camState === "denied" ? "Gloo needs the camera." : "No camera found."}</h1>
-            <p className="mt-3 max-w-xs text-sm text-paper/70">{camState === "denied" ? "Allow the camera and microphone for this site in your browser settings, then try again." : "Open this on a phone, or on glasses with a camera."}</p>
-            <button className="btn-light mt-6" onClick={openCamera}><CameraIcon /> Try again</button>
-          </div>
-        )}
+        {!live && <AmbientGate state={camState} onStart={openCamera} />}
 
         {live && (<>
           <p className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-paper/80" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 2.2rem)" }}>
