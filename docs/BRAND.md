@@ -16,3 +16,5 @@ Files: `gloo-logo-on-dark.svg` (header), `gloo-paw-gold.svg` (gate screen), `glo
 and `gloo-token-256.png` (reserved for credits, see decision 23), `gloo-paw-mono-white.svg`
 (for the glasses manifest icon, which needs a monochrome mark). PNG 2x versions are kept for
 places SVG can't go.
+
+Animated marks (`web/public/brand/animated/`): the logo, the paw and the token with each toe as its own clipped shape (`.i0`..`.i4`, left to right) and a glow circle per toe, so toes can light one at a time. The brand guide and the ambient landing study are kept under `web/public/design/`.

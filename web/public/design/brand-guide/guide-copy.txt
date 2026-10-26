@@ -1,0 +1,65 @@
+
+Brand guide · v0.1
+A teal gecko foot with gold toes. Gold marks where you touch: the five toes are the five ticks of the stickiness meter. Teal carries the brand. Gold is for the mark and the token.
+01 · Logo
+Two lockups, one icon
+On light. Teal palm, navy wordmark, gold toes.
+On dark. Brighter teal, cream wordmark.
+One color. For print, stamps and anywhere gold can’t be used.
+Clear space.
+ Keep the width of the “o” counter free on all sides (about a fifth of the logo height).
+96px
+24px
+16px
+Minimum size.
+ Full logo 96px wide. Below that use the icon, down to 16px. Under 24px use the all-gold token mark below.
+02 · Token and small marks
+All-gold paw on a dark disc
+Teal falls apart in token lists and favicons. At small sizes the whole paw goes gold on near-black, so it holds its shape on light and dark lists.
+16
+32
+64
+128
+app icon
+Same disc on a light list. The dark disc always travels with the gold paw.
+03 · Color
+Teal for the brand, gold for the mark
+{{ s.name }}
+{{ s.hex }}
+{{ s.use }}
+Gold gradient on the toes and token paw, top to bottom.
+04 · Type
+Three voices
+Gloo works through your 
+camera.
+Instrument Serif. Headlines on landing and in lessons.
+Point at a hard word and say “gloo it”.
+Hanken Grotesk. Body, buttons, spoken lines.
+sounds like · ≈ cola
+JetBrains Mono. Labels, pieces, tags.
+The wordmark’s rounded letters are drawn, not set in a font. Never retype it.
+05 · Use
+Rules of thumb
+Do
+Use the on-dark logo over photos and the camera view, under a dark wash.
+Use gold only on the toes, the token paw and the five-tick meter when it is full.
+Keep the five toes as the five stickiness ticks everywhere they appear.
+Use the mono ink logo when only one color is available.
+Don’t
+Don’t put the teal paw on mid-tone or busy backgrounds.
+Don’t make the palm gold in the full logo. Only the all-gold token does that.
+Don’t add outlines, glows, shadows or gradients to the wordmark.
+Don’t stretch, rotate, or rearrange the paw and wordmark.
+06 · Files
+What’s in brand/
+svg/
+Vector logos (light, dark, all-gold, mono ink and white), icons, paw, token, app icon, favicon
+png/
+Logos at 1x and 2x, icons and paw at 960px, all transparent
+token/gloo-token-16 … 1024.png
+Gold paw on dark disc
+app-icon-512.png, -1024.png
+Rounded square for app stores
+web/
+favicon.ico (16, 32, 48), apple-touch-icon, 192 and 512 icons, maskable icon, og-image 1200×630, site.webmanifest, head-snippet.html
+The vectors were traced from your concept image, so curves are close but not hand-drawn. Have a designer clean them up before launch.
