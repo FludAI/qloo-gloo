@@ -298,7 +298,7 @@ test("say: the server speaks the pieces from IPA, once; hits are free of the lim
   assert.equal(first.headers.get("x-gloo-cache"), "miss");
   const said = Buffer.from(await first.arrayBuffer()).toString();
   assert.ok(said.startsWith("MP3|en-US-"));
-  assert.ok(said.includes('<phoneme alphabet="ipa" ph="koʊli">chole</phoneme>'));
+  assert.ok(said.includes('<phoneme alphabet="ipa" ph="ˈkoʊlə">chole</phoneme>'));
   const again = await raw("/api/say", { text: "chole means bile.", term_id: "cholecystokinin" }, cookie);
   assert.equal(again.headers.get("x-gloo-cache"), "hit");
   assert.equal(ttsCalls, before + 1);
@@ -341,7 +341,7 @@ test("owner: 401 without the header, 403 with the wrong token, 200 with the righ
 
 test("owner: a PATCH bumps the version, is validated, and reaches the learner app at once", async () => {
   const o = owner(), s = session();
-  const bad = await o("PATCH", "/api/admin/lessons/cholecystokinin", { title: "", roles: [{ id: "chole", ipa: "/koʊli/" }] });
+  const bad = await o("PATCH", "/api/admin/lessons/cholecystokinin", { title: "", roles: [{ id: "chole", ipa: "/ˈkoʊlə/" }] });
   assert.equal(bad.status, 400);
   assert.ok(bad.body.problems.some((p) => p.startsWith("title:")) && bad.body.problems.some((p) => p.startsWith("roles[0].ipa:")));
   const ok = await o("PATCH", "/api/admin/lessons/cholecystokinin", {

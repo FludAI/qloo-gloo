@@ -16,7 +16,7 @@ test("ssml: every piece and the whole word are wrapped in their IPA; the rest is
   const s = buildSsml("Cholecystokinin (CCK). Chole means bile & cysto means sac.", cck);
   assert.ok(s.startsWith("<speak>") && s.endsWith("</speak>"));
   assert.ok(s.includes(ph("ˌkoʊlɪˌsɪstoʊˈkaɪnɪn", "Cholecystokinin")));
-  assert.ok(s.includes(ph("koʊli", "Chole")));
+  assert.ok(s.includes(ph("ˈkoʊlə", "Chole")));
   assert.ok(s.includes(ph("ˈsɪstoʊ", "cysto")));
   assert.ok(s.includes("&amp;"));
   assert.ok(!s.includes("<phoneme alphabet=\"ipa\" ph=\"ɪn\">in<"), "the English word 'in' is not a piece");
@@ -42,7 +42,7 @@ test("clips: a sentence is synthesized once, then served from the store; the sid
   const sp = createSpeaker({ store, synth, voice: "en-US-Test" });
   const a = await sp.say("chole means bile.", cck);
   assert.equal(a.cached, false);
-  assert.ok(a.bytes.toString().includes(ph("koʊli", "chole")));
+  assert.ok(a.bytes.toString().includes(ph("ˈkoʊlə", "chole")));
   const b = await sp.say("chole  means bile.", cck); // whitespace differences don't buy a second clip
   assert.equal(b.cached, true);
   assert.equal(b.clip, a.clip);

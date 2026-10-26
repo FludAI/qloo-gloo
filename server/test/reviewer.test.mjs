@@ -69,7 +69,7 @@ test("the meaning claim without real components is a fix; sounds and say/ipa agr
   assert.equal(soundScore({ part: "-in", sound_like: "-in" }, { name: "Penguin", say: ["penguin books"] }), 1);
   assert.equal(soundScore({ part: "0 to 1", sound_like: "one" }, { name: "Formula 1" }), 1);
   assert.equal(sayIpaAgreement("koh-lih-sis-tuh-KY-nin", "ˌkoʊlɪˌsɪstoʊˈkaɪnɪn"), 1);
-  assert.ok(sayIpaAgreement("sis-toh", "koʊli") < 0.6);
+  assert.ok(sayIpaAgreement("sis-toh", "ˈkoʊlə") < 0.6);
 });
 
 test("answers pass their own rubrics by type: text through assess, numbers by stating the value, choices by naming the option", () => {
@@ -87,7 +87,7 @@ test("model output is checked: bad paths, no-ops, invalid values and rubric-fail
     { path: "summary", after: "Chole is bile, cysto is the sac, kin is movement.", reason: "Spoken.", severity: "improve" },
     { path: "roles[chole].nickname", after: "x", reason: "no such field", severity: "fix" },
     { path: "definition", after: doc.definition, reason: "unchanged", severity: "improve" },
-    { path: "pronunciation.ipa", after: "/koʊli/", reason: "slashes fail validation", severity: "fix" },
+    { path: "pronunciation.ipa", after: "/ˈkoʊlə/", reason: "slashes fail validation", severity: "fix" },
     { path: "prompts[cck-chole].answer", after: "Cola.", reason: "a misconception, not bile", severity: "fix" },
     { path: "prompts[cck-cysto].answer", after: "Cysto", reason: "passes the strict rule (a trailing period would not)", severity: "fix" },
     { path: "roles[chole].pick.options[4].name", after: "Royal Crown Cola", reason: "a fifth cola", severity: "improve" },
