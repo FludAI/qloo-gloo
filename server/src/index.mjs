@@ -160,7 +160,7 @@ app.get("/api/terms/:id", (req, res) => {
   const first = q.getFirst.get(req.sid, t.id);
   // The lesson unlocks only after the first attempt is saved or explicitly skipped.
   if (!first) return res.json({ id: t.id, title: t.title, first_attempt: t.first_attempt, locked: true, pronunciation: t.pronunciation,
-    pieces: (t.roles ?? []).filter((r) => r.part).map((r) => ({ part: r.part, say: r.say ?? null })) });
+    pieces: (t.roles ?? []).filter((r) => r.part).map((r) => ({ part: r.part, say: r.say ?? null, ipa_syllables: r.ipa_syllables ?? null })) });
   res.json({ ...publicTerm(t), locked: false, first_attempt_record: { ...first, pieces: first.pieces ? JSON.parse(first.pieces) : null } });
 });
 
@@ -470,7 +470,20 @@ app.post("/api/say", gate, wrap(async (req, res) => {
   res.setHeader("cache-control", "private, max-age=86400");
   res.setHeader("x-gloo-clip", out.clip);
   res.setHeader("x-gloo-cache", out.verified ? "verified" : out.cached ? "hit" : "miss");
+  // The syllable marks of the word and pieces in this line, for the paw: base64 JSON (IPA can't ride in a header as is).
+  if (out.marks?.length) res.setHeader("x-gloo-marks", Buffer.from(JSON.stringify(out.marks), "utf8").toString("base64"));
   res.end(out.bytes);
+}));
+
+// The same marks as JSON, for a clip that already exists: GET /api/say/timing?text=…&term_id=… -> { clip, verified, marks }.
+app.get("/api/say/timing", gate, wrap(async (req, res) => {
+  const text = String(req.query.text ?? "").replace(/\s+/g, " ").trim().slice(0, SAY_MAX);
+  if (!text) return res.status(400).json({ error: "text is required" });
+  const term = req.query.term_id ? termFor(req.sid, String(req.query.term_id)) : null;
+  if (req.query.term_id && !term) return res.status(404).json({ error: "unknown term" });
+  const r = await speaker.timing(text, term);
+  if (!r) return res.status(404).json({ error: "No clip for that text yet. Play it first." });
+  res.json(r);
 }));
 
 // Owner's ear: "sounds right" pins the clip forever; "sounds wrong" unpins it.

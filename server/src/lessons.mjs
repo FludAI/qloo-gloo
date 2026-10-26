@@ -6,6 +6,7 @@
 // so edits survive a redeploy; SQLite is the hot cache on the instance; a Map is the working copy.
 // Code seeds a lesson only when the store has no copy of that id. Code never overwrites a stored lesson.
 import { DatabaseSync } from "node:sqlite";
+import { consistent, hyphenated, respellingCount, syllablesOf } from "./syllables.mjs";
 
 export const ID = /^[a-z0-9][a-z0-9-]{1,60}$/;
 export const HISTORY = 20;
@@ -65,6 +66,19 @@ const ROLE_ID = /^[a-z0-9_-]{1,24}$/;
 const isStr = (v, max = 400) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
 const optStr = (v, max = 400) => v == null || (typeof v === "string" && v.length <= max);
 const strList = (v, max = 120) => Array.isArray(v) && v.every((s) => typeof s === "string" && s.length <= max);
+const MAX_SYLLABLES = 16;
+
+// ipa_syllables: a list of IPA strings, one per syllable, or null. Where the respelling is hyphenated
+// ("koh-lih-sis-tuh-KY-nin", "sis-toh") its token count must match; a hook word ("cola") is not a count.
+function checkSyllables(at, x, say, bad) {
+  const s = x?.ipa_syllables;
+  if (s != null) {
+    if (!Array.isArray(s) || !s.length || s.length > MAX_SYLLABLES || !s.every((v) => typeof v === "string" && v.trim() && v.length <= 20 && IPA.test(v))) return bad(`${at}.ipa_syllables: a list of IPA syllables (1 to ${MAX_SYLLABLES}), or null`);
+    if (!consistent(x.ipa, s)) return bad(`${at}.ipa_syllables: joined, they must spell ${at}.ipa`);
+  }
+  const n = syllablesOf(x).length;
+  if (n && hyphenated(say) && respellingCount(say) !== n) bad(`${at}: ${n} IPA syllable${n === 1 ? "" : "s"} but the respelling "${say}" has ${respellingCount(say)}`);
+}
 
 export function validatePacket(p) {
   const problems = [];
@@ -78,6 +92,7 @@ export function validatePacket(p) {
     if (!isStr(p.pronunciation.approx, 80)) bad("pronunciation.approx: a non-empty respelling");
     if (p.pronunciation.ipa != null && !(typeof p.pronunciation.ipa === "string" && p.pronunciation.ipa.length <= 80 && IPA.test(p.pronunciation.ipa))) bad("pronunciation.ipa: IPA letters and stress marks only, no slashes, or null");
     if (!optStr(p.pronunciation.note, 300)) bad("pronunciation.note: a string or null");
+    checkSyllables("pronunciation", p.pronunciation, p.pronunciation.approx, bad);
   }
   if (p.aliases != null && !strList(p.aliases, 80)) bad("aliases: a list of strings");
   if (p.distinctions != null && !strList(p.distinctions, 300)) bad("distinctions: a list of strings");
@@ -98,6 +113,7 @@ export function validatePacket(p) {
       if (!optStr(r.meaning, 120)) bad(`${at}.meaning: a string`);
       if (!optStr(r.say, 60)) bad(`${at}.say: a respelling or null`);
       if (r.ipa != null && !(typeof r.ipa === "string" && r.ipa.length <= 60 && IPA.test(r.ipa))) bad(`${at}.ipa: IPA letters and stress marks only, no slashes, or null`);
+      checkSyllables(at, r, r.say, bad);
       if (!optStr(r.sound_like, 60)) bad(`${at}.sound_like: a string or null`);
       if (!optStr(r.target, 160)) bad(`${at}.target: a string`);
       if (!optStr(r.look_for, 200)) bad(`${at}.look_for: a string`);
@@ -163,7 +179,7 @@ export function validatePacket(p) {
 const TOP_SCALARS = ["title", "summary", "definition", "scene", "origin", "formula"];
 const TOP_LISTS = ["aliases", "components", "family", "distinctions", "transfer", "sources", "rules", "examples", "editorial_cues"];
 const TOP_OBJECTS = ["pronunciation", "first_attempt", "graph"];
-const ROLE_FIELDS = ["label", "part", "say", "ipa", "sound_like", "meaning", "target", "look_for"];
+const ROLE_FIELDS = ["label", "part", "say", "ipa", "ipa_syllables", "sound_like", "meaning", "target", "look_for"];
 const OPTION_FIELDS = ["name", "wiki", "say", "connection", "qloo"];
 const PROMPT_FIELDS = ["skill", "type", "question", "hint", "answer", "accept_all", "accept_any", "expected", "options", "misconceptions", "bonus"];
 const META = new Set(["id", "version", "review_status", "reviewed_at", "edited_by", "edited_at", "history", "provisional", "promoted_from", "pending"]);

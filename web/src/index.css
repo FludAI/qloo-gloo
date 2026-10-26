@@ -66,5 +66,12 @@ body { background: #000; -webkit-tap-highlight-color: transparent; overscroll-be
 @keyframes fill-up { from { opacity: 0; transform: scaleY(.2); } to { opacity: 1; transform: scaleY(1); } }
 .fill-up { animation: fill-up .16s cubic-bezier(.3,1.5,.5,1) both; transform-origin: 50% 100%; }
 @media (prefers-reduced-motion: reduce) { .sweep::after, .rise, .fade-in, .pulse-word, .slide-in, .light-up, .word-glow, .fall-back, .fill-up { animation-duration: 0s !important; animation-iteration-count: 1 !important; } }
+/* The syllable paw (Paw.jsx): toes change state within 100 ms; an idle paw breathes gold across its glows. */
+.paw .paw-pad { transition: opacity .12s ease-out, fill .12s ease-out; }
+.paw .paw-glow { transition: opacity .16s ease-out; }
+.paw .paw-lit .paw-pad { filter: drop-shadow(0 0 6px rgba(246,203,92,.55)); }
+@keyframes paw-breath { 0%, 100% { opacity: 0; } 40% { opacity: .34; } 60% { opacity: .3; } }
+.paw-breath .paw-glow { animation: paw-breath 3.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .paw-breath .paw-glow { animation: none; } .paw .paw-pad, .paw .paw-glow { transition: none; } }
 @keyframes lock-snap { 0% { transform: scale(1); } 100% { transform: scale(.975); } }
 .reticle-lock { animation: lock-snap .16s cubic-bezier(.3,1.5,.5,1) forwards; }

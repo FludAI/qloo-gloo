@@ -3,7 +3,8 @@ import { api } from "../api.js";
 import Practice from "./Practice.jsx";
 import SayIt from "./SayIt.jsx";
 import PickCard from "./PickCard.jsx";
-import { Rail } from "./Motion.jsx";
+import { PawRow, SpokenPaw, useHeardToes } from "./Paw.jsx";
+import { pawPlan } from "../lib/paw.js";
 import { speak, hush } from "../lib/speak.js";
 import { sfx } from "../lib/sfx.js";
 import { CloseIcon } from "./Icons.jsx";
@@ -98,15 +99,26 @@ function Captured({ glued, onRegue, onClose }) {
 }
 
 // Saved before anything about the term is shown. Say it, or admit you don't know it yet.
-// The server scores the attempt against the sound pieces in the background.
+// The server scores the attempt against the sound pieces; the paw lights a toe per syllable heard while they
+// hold the mic, then settles to gold for the pieces they got and dim for the rest before the lesson opens.
 function FirstAttempt({ term, health, guard, onSaved }) {
   const [busy, setBusy] = useState(false);
+  const plan = useMemo(() => pawPlan(term, term.pieces ?? []), [term.id]);
+  const paw = useHeardToes(plan);
   useEffect(() => { speak(term.first_attempt?.question ?? "How would you say it?", { term }); return hush; }, [term.id]);
-  const save = (body) => guard(async () => { setBusy(true); try { await api.firstAttempt(term.id, body); onSaved(); } finally { setBusy(false); } });
+  const save = (body) => guard(async () => {
+    setBusy(true);
+    try {
+      const r = await api.firstAttempt(term.id, body);
+      if (r?.pieces) { paw.settle(r.pieces); sfx(r.pieces.said_count ? "chime" : "tick"); await new Promise((done) => setTimeout(done, 1500)); }
+      onSaved();
+    } finally { setBusy(false); }
+  });
   return (
     <section className="mt-5">
       <p className="text-xl leading-snug">{term.first_attempt?.question ?? "How would you say it? A guess is fine."}</p>
-      <div className="mt-6"><SayIt big health={health} guard={guard} onText={(t) => save({ response: t })} label="Hold and say it" /></div>
+      <PawRow n={plan.count} states={paw.states} size={plan.count > 5 ? 84 : 110} className="mt-4" label={`${plan.count} syllables`} />
+      <div className="mt-4"><SayIt big health={health} guard={guard} onText={(t) => save({ response: t })} onLevel={paw.onLevel} onListening={paw.onListening} label="Hold and say it" /></div>
       <button className="mt-6 w-full text-sm text-paper/60 underline" disabled={busy} onClick={() => save({ skipped: true })}>I don't know it yet</button>
     </section>
   );
@@ -149,7 +161,7 @@ function Together({ term, roles, chosen, onNext, onBack }) {
           ))}
         </div>
       </div>
-      <Rail count={roles.length} lit={lit + 1} className="mt-2" />
+      <SpokenPaw term={term} size={56} className="mt-2" />
       <p className={`mt-2 text-center text-base leading-snug ${glow ? "fade-in" : "opacity-0"}`}>{term.summary}</p>
       <button className="mt-2 w-full text-center text-sm text-paper/60 underline" onClick={() => setMore(!more)}>{more ? "Less" : "More"}</button>
       {more && (

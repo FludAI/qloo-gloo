@@ -1,12 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, newKey } from "../api.js";
 import SayIt from "./SayIt.jsx";
 import { AnswerRing, shake } from "./Motion.jsx";
+import { PawRow, useHeardToes } from "./Paw.jsx";
+import { bareTitle, pawPlan } from "../lib/paw.js";
 import { speak, hush } from "../lib/speak.js";
+
+const squash = (s) => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+// Is this reviewed answer the word itself (not a meaning, a number or a piece)?
+const isTheWord = (answer, term) => { const a = squash(answer), w = squash(bareTitle(term)); return Boolean(a && w) && (a === w || a.includes(w)); };
 
 // One prompt at a time. Say the answer, or tap a choice. Cues stay hidden here.
 // Feedback: a ring closes with a chime on a hit, a shake and the answer on a miss, a soft ring on uncertain.
+// The paw lights toes from the learner's voice while they speak; it settles to right or wrong only when the
+// answer was the word itself, and goes back to idle for any other answer.
 export default function Practice({ term, health, guard, onAttempt, onDone }) {
+  const plan = useMemo(() => pawPlan(term), [term.id]);
+  const paw = useHeardToes(plan);
   const [data, setData] = useState(null);
   const [hint, setHint] = useState("");
   const [result, setResult] = useState(null);
@@ -16,7 +26,7 @@ export default function Practice({ term, health, guard, onAttempt, onDone }) {
   const host = useRef(null);
 
   const load = async (after) => {
-    setData(await api.next(term.id, after)); setHint(""); setResult(null); setHeard(""); setKey(newKey());
+    setData(await api.next(term.id, after)); setHint(""); setResult(null); setHeard(""); setKey(newKey()); paw.reset();
   };
   useEffect(() => { load().catch(() => {}); return hush; }, [term.id]);
   useEffect(() => { if (data?.prompt && !result) speak(data.prompt.question, { term }); }, [data?.prompt?.id]);
@@ -27,6 +37,9 @@ export default function Practice({ term, health, guard, onAttempt, onDone }) {
     try {
       const r = await api.attempt({ prompt_id: data.prompt.id, response: value, idempotency_key: key });
       setResult(r); onAttempt?.();
+      // The paw judges only the word itself: every toe gold on a hit, dim on a miss; other answers leave it idle.
+      if (isTheWord(r.answer, term) && r.outcome !== "uncertain") paw.settle({ pieces: plan.targets.slice(1).map(() => ({ said: r.outcome === "correct" })), said_count: r.outcome === "correct" ? plan.targets.length - 1 : 0 });
+      else paw.reset();
       if (r.outcome === "incorrect") { shake(host.current); setTimeout(() => speak(r.answer ? `${r.feedback} ${r.answer}` : r.feedback, { term }), 480); }
       else if (r.outcome === "correct") setTimeout(() => speak(r.feedback, { term }), 500);
     } finally { setBusy(false); }
@@ -49,7 +62,10 @@ export default function Practice({ term, health, guard, onAttempt, onDone }) {
           {p.options.map((o) => <button key={o} className="tile" disabled={busy} onClick={() => submit(o)}>{o}</button>)}
         </div>
       ) : (
-        <div className="mt-2"><SayIt big health={health} guard={guard} onText={submit} label={p.type === "number" ? "Hold and say the number" : "Hold and say your answer"} /></div>
+        <div className="mt-2">
+          <PawRow n={plan.count} states={paw.states} size={plan.count > 5 ? 52 : 64} className="mb-2" label={`${plan.count} syllables`} />
+          <SayIt big health={health} guard={guard} onText={submit} onLevel={paw.onLevel} onListening={paw.onListening} label={p.type === "number" ? "Hold and say the number" : "Hold and say your answer"} />
+        </div>
       ))}
       {!result && p.has_hint && (
         hint ? <p className="mt-3 text-center text-sm text-gloo">Hint: {hint}</p>

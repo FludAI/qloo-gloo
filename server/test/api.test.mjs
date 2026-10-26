@@ -25,10 +25,12 @@ before(async () => {
     req.on("end", () => {
       const parsed = JSON.parse(body || "{}");
       if (req.url === "/tts") {
-        // Fake Text-to-Speech: echoes the SSML it was sent as the "audio", so the test can read what was said.
+        // Fake Text-to-Speech: echoes the SSML it was sent as the "audio", so the test can read what was said;
+        // when time points are asked for, every <mark> gets one, 0.25 s apart.
         ttsCalls++;
         res.setHeader("content-type", "application/json");
-        return res.end(JSON.stringify({ audioContent: Buffer.from(`MP3|${parsed.voice?.name}|${parsed.input?.ssml}`).toString("base64") }));
+        const names = parsed.enableTimePointing?.includes("SSML_MARK") ? [...String(parsed.input?.ssml ?? "").matchAll(/<mark name="([^"]+)"/g)].map((m) => m[1]) : [];
+        return res.end(JSON.stringify({ audioContent: Buffer.from(`MP3|${parsed.voice?.name}|${parsed.input?.ssml}`).toString("base64"), timepoints: names.map((n, i) => ({ markName: n, timeSeconds: 0.25 * i })) }));
       }
       const offered = (parsed.tools ?? []).map((t) => t.name);
       const forcedTool = ["resolve_term", "draft_lesson", "read_word", "suggest_field", "review_lesson"].find((n) => offered.includes(n));
@@ -115,10 +117,16 @@ const session = () => {
 
 test("1: lesson stays locked until the first attempt is saved or skipped", async () => {
   const s = session();
-  assert.equal((await s("GET", "/api/terms/brier-score")).body.locked, true);
+  const locked = (await s("GET", "/api/terms/brier-score")).body;
+  assert.equal(locked.locked, true);
+  // The locked packet carries the syllables the paw needs for the first attempt, and nothing else about the lesson.
+  assert.deepEqual(locked.pronunciation.ipa_syllables, ["ˈbraɪ", "ər", "skɔːr"]);
+  assert.deepEqual(locked.pieces.map((p) => [p.part, p.ipa_syllables]), [["Brier", ["ˈbraɪ", "ər"]], ["lower", null], ["0 to 1", null], ["score", null]]);
   assert.equal((await s("POST", "/api/cues/agent", { term_id: "brier-score", familiar: ["Breyers"] })).status, 409);
   await s("POST", "/api/terms/brier-score/first-attempt", { skipped: true });
-  assert.equal((await s("GET", "/api/terms/brier-score")).body.locked, false);
+  const open = (await s("GET", "/api/terms/brier-score")).body;
+  assert.equal(open.locked, false);
+  assert.deepEqual(open.roles[0].ipa_syllables, ["ˈbraɪ", "ər"]);
 });
 
 test("a spoken first attempt is scored against the pieces in the background", async () => {
@@ -298,10 +306,17 @@ test("say: the server speaks the pieces from IPA, once; hits are free of the lim
   assert.equal(first.headers.get("x-gloo-cache"), "miss");
   const said = Buffer.from(await first.arrayBuffer()).toString();
   assert.ok(said.startsWith("MP3|en-US-"));
-  assert.ok(said.includes('<phoneme alphabet="ipa" ph="ˈkoʊlə">chole</phoneme>'));
+  assert.ok(said.includes('<mark name="m0"/><phoneme alphabet="ipa" ph="ˈkoʊ">cho</phoneme><mark name="m1"/><phoneme alphabet="ipa" ph="lə">le</phoneme>'), said);
+  const marks = (res) => JSON.parse(Buffer.from(res.headers.get("x-gloo-marks"), "base64").toString("utf8"));
+  assert.deepEqual(marks(first), [{ index: 0, piece: "chole", syllable: "ˈkoʊ", time: 0 }, { index: 1, piece: "chole", syllable: "lə", time: 0.25 }]);
   const again = await raw("/api/say", { text: "chole means bile.", term_id: "cholecystokinin" }, cookie);
   assert.equal(again.headers.get("x-gloo-cache"), "hit");
+  assert.deepEqual(marks(again), marks(first), "a hit carries the same marks");
   assert.equal(ttsCalls, before + 1);
+  const timing = await fetch(`http://localhost:${PORT}/api/say/timing?text=${encodeURIComponent("chole means bile.")}&term_id=cholecystokinin`, { headers: { cookie } });
+  assert.equal(timing.status, 200);
+  assert.deepEqual((await timing.json()).marks, marks(first));
+  assert.equal((await fetch(`http://localhost:${PORT}/api/say/timing?text=never&term_id=cholecystokinin`, { headers: { cookie } })).status, 404);
   // Limit is 2 synths per session per hour in this harness: a third new line is refused, old lines still play.
   assert.equal((await raw("/api/say", { text: "second line", term_id: "cholecystokinin" }, cookie)).status, 200);
   assert.equal((await raw("/api/say", { text: "third line", term_id: "cholecystokinin" }, cookie)).status, 429);

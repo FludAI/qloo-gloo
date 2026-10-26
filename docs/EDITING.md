@@ -183,6 +183,10 @@ curl -s -X PATCH https://gloo.news/api/admin/lessons/cholecystokinin -H "x-gloo-
   and aliases.
 - A changed `ipa` or `say` changes the SSML, so the clip is synthesized again on
   the next play (a clip marked "sounds right" is never regenerated).
+- `ipa_syllables` (on `pronunciation` and on each role, next to `ipa`) is the IPA split
+  into syllables, one string each: the paw lights one toe per entry. Leave it null and the
+  server splits the IPA itself; set it when the split is wrong. Joined, the entries must
+  spell the `ipa`, and a hyphenated respelling must have as many parts.
 - Pick pictures come from the Wikipedia title; change `wiki` to change the picture.
 
 ## Truthfulness
