@@ -13,6 +13,7 @@ test("a meaning prompt tells the recognizer its answer, the word and the pieces"
   assert.ok(h.includes("chole") && h.includes("cysto") && h.includes("kin"), h.join("|"));
   assert.ok(h.some((x) => x.startsWith("cholecystokinin")), h.join("|"));
   assert.ok(h.every((x) => x === x.toLowerCase() && x.length <= 60));
+  assert.ok(!h.some((x) => x.includes("-toh") || x === "cola"), "respellings are sounds, not spellings: " + h.join("|"));
 });
 
 test("a parenthesis and an 'or' split into separate phrases", () => {
@@ -36,6 +37,16 @@ test("among the recognizer's readings, the first the prompt accepts wins", () =>
   assert.equal(bestHeard(p, "Bayou", ["vile", "aisle"]), "Bayou");
   assert.equal(bestHeard(p, "Bayou", []), "Bayou");
   assert.equal(bestHeard(null, "Bayou", ["bile"]), "Bayou");
+});
+
+test("a reading that sounds like one piece answers for that piece", () => {
+  const p = prompt(cck, "cck-cysto");
+  assert.equal(bestHeard(p, "sis-toh", [], cck), "cysto");
+  assert.equal(bestHeard(p, "sisto", ["Sis toe"], cck), "cysto");
+  assert.equal(bestHeard(p, "cysto", [], cck), "cysto");
+  assert.equal(bestHeard(p, "cyto", [], cck), "cyto", "a misconception stays itself");
+  assert.equal(bestHeard(prompt(cck, "cck-chole"), "bile", ["file"], cck), "bile", "an accepted reading comes first");
+  assert.equal(bestHeard(p, "the thing that holds the bile in the body", [], cck), "the thing that holds the bile in the body", "a long answer is left alone");
 });
 
 test("what the prompt expects is a second, stronger speech context", () => {

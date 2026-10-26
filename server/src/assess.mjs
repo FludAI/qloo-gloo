@@ -1,4 +1,5 @@
 // Deterministic assessment. The server is the only authority for a score.
+import { scorePieces, termPieces } from "./resolve/pieces.mjs";
 
 export class BrierInputError extends Error {}
 
@@ -102,15 +103,26 @@ export function promptHints(prompt, term) {
   else out.push(...speakable(prompt.answer));
   if (term) {
     out.push(...speakable(term.title));
-    for (const r of term.roles ?? []) { if (r.part) out.push(r.part.replace(/^-|-$/g, "").toLowerCase()); if (r.say) out.push(...speakable(r.say)); }
+    for (const r of term.roles ?? []) if (r.part) out.push(r.part.replace(/^-|-$/g, "").toLowerCase());
   }
   return [...new Set(out)];
 }
 
 // Among what the recognizer heard (its best guess first), the first reading the prompt accepts; else the best guess.
-// "bayou" / "bile" / "vile": the learner said bile.
-export function bestHeard(prompt, transcript, alternatives = []) {
+// "bayou" / "bile" / "vile": the learner said bile. A short reading that sounds like exactly one piece of the
+// term also stands for that piece ("sisto", "sis-toh" -> cysto), since a piece is answered by its sound.
+export function bestHeard(prompt, transcript, alternatives = [], term = null) {
   const heard = [transcript, ...alternatives].map((t) => String(t ?? "").trim()).filter(Boolean);
-  if (!prompt || heard.length < 2) return heard[0] ?? "";
-  return heard.find((t) => assess(prompt, t).outcome === "correct") ?? heard[0];
+  if (!prompt) return heard[0] ?? "";
+  const asPiece = (t) => {
+    if (!term || prompt.type !== "text" || t.split(/\s+/).length > 2) return null;
+    const { pieces } = scorePieces(termPieces(term), t);
+    const said = pieces.filter((x) => x.said && !x.part.startsWith("-"));
+    return said.length === 1 ? said[0].part : null;
+  };
+  // A reading that is a known misconception stays itself ("cyto" sounds like cysto but means cell).
+  const misheard = (t) => (prompt.misconceptions ?? []).some(([re]) => re.test(norm(t)));
+  const candidates = [...heard, ...(heard.some(misheard) ? [] : heard.map(asPiece).filter(Boolean))];
+  if (candidates.length < 2) return heard[0] ?? "";
+  return candidates.find((t) => assess(prompt, t).outcome === "correct") ?? heard[0];
 }

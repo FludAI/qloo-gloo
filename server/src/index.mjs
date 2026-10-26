@@ -184,7 +184,7 @@ app.post("/api/transcribe", gate, wrap(async (req, res) => {
     // The mock hears "bayou" first and the prompt's answer second, so the pick among readings is testable.
     const found = req.body?.prompt_id ? promptFor(req.sid, String(req.body.prompt_id)) : null;
     const alts = found ? ["bayou", String(found.prompt.answer ?? "").replace(/\.$/, "").toLowerCase()] : ["gloo it"];
-    return res.json({ transcript: found ? bestHeard(found.prompt, alts[0], alts.slice(1)) : alts[0], alternatives: alts.slice(1), provider: "mock", expected: found ? promptHints(found.prompt, found.term) : [] });
+    return res.json({ transcript: found ? bestHeard(found.prompt, alts[0], alts.slice(1), found.term) : alts[0], alternatives: alts.slice(1), provider: "mock", expected: found ? promptHints(found.prompt, found.term) : [] });
   }
   if ((await sttMode()) !== "google") return res.status(503).json({ error: "Server speech isn't configured.", code: "STT_UNAVAILABLE" });
   const lim = take("stt", req.sid);
@@ -196,7 +196,7 @@ app.post("/api/transcribe", gate, wrap(async (req, res) => {
     const found = req.body?.prompt_id ? promptFor(req.sid, String(req.body.prompt_id)) : null;
     const expected = found ? promptHints(found.prompt, found.term) : [];
     const out = await transcribe({ pcm16, hints: SPEECH_HINTS, expected });
-    if (found) out.transcript = bestHeard(found.prompt, out.transcript, out.alternatives);
+    if (found) out.transcript = bestHeard(found.prompt, out.transcript, out.alternatives, found.term);
     q.logCall.run(req.sid, "google-stt", "recognize", out.transcript ? "ok" : "empty", null, performance.now() - t0, Date.now());
     res.json({ ...out, provider: "google" });
   } catch (e) {
