@@ -103,7 +103,7 @@ export function promptHints(prompt, term) {
   else out.push(...speakable(prompt.answer));
   if (term) {
     out.push(...speakable(term.title));
-    for (const r of term.roles ?? []) if (r.part) out.push(r.part.replace(/^-|-$/g, "").toLowerCase());
+    for (const r of term.roles ?? []) { if (r.part) out.push(r.part.replace(/^-|-$/g, "").toLowerCase()); if (r.sound_like) out.push(...speakable(r.sound_like)); }
   }
   return [...new Set(out)];
 }
@@ -120,9 +120,12 @@ export function bestHeard(prompt, transcript, alternatives = [], term = null) {
     const said = pieces.filter((x) => x.said && !x.part.startsWith("-"));
     return said.length === 1 ? said[0].part : null;
   };
-  // A reading that is a known misconception stays itself ("cyto" sounds like cysto but means cell).
-  const misheard = (t) => (prompt.misconceptions ?? []).some(([re]) => re.test(norm(t)));
-  const candidates = [...heard, ...(heard.some(misheard) ? [] : heard.map(asPiece).filter(Boolean))];
+  // A reading that is a known misconception stays itself ("cyto" sounds like cysto but means cell), unless it is
+  // a piece's own hook word: the recognizer hears cysto as "sister", and by ear the two cannot be told apart.
+  const letters = (t) => String(t ?? "").toLowerCase().replace(/[^a-z]+/g, "");
+  const hook = (t) => (term?.roles ?? []).some((r) => [r.sound_like, r.say].some((h) => h && letters(h) === letters(t)));
+  const misheard = (t) => !hook(t) && (prompt.misconceptions ?? []).some(([re]) => re.test(norm(t)));
+  const candidates = [...heard, ...heard.filter((t) => !misheard(t)).map(asPiece).filter(Boolean)];
   if (candidates.length < 2) return heard[0] ?? "";
   return candidates.find((t) => assess(prompt, t).outcome === "correct") ?? heard[0];
 }
