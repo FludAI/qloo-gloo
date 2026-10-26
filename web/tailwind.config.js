@@ -8,8 +8,8 @@ export default {
         ink: "#1d1a16",
         muted: "#6b6358",
         line: "#ddd3c2",
-        gloo: { DEFAULT: "#d9822b", deep: "#a85a12", soft: "#f6dfc2" },
-        sea: "#2f6f73",
+        gloo: { DEFAULT: "#dfaa37", deep: "#c98a12", soft: "#f6cb5c" },
+        sea: { DEFAULT: "#11917f", lit: "#2bb8a3" },
       },
       fontFamily: {
         display: ['"Instrument Serif"', "Georgia", "serif"],

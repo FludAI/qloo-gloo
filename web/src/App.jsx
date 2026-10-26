@@ -79,7 +79,7 @@ export default function App() {
     <div className="relative h-full w-full select-none overflow-hidden bg-black text-paper">
       <Camera ref={cam} onState={onCamState} scan={scan}>
         <div className="safe-top absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4">
-          <span className="font-display text-2xl tracking-tight">gloo</span>
+          <img src="/brand/gloo-logo-on-dark.svg" alt="Gloo" className="h-8 w-auto" draggable="false" />
           <div className="flex items-center gap-2">
             {locked && <button className="round !h-9 !w-9" aria-label="Enter passcode" onClick={() => setPass({ retry: null })}><LockIcon /></button>}
             <button className="round !h-9 !w-9" aria-label="About this demo" onClick={() => setInfo(true)}><InfoIcon /></button>
@@ -88,6 +88,7 @@ export default function App() {
 
         {(camState === "idle" || camState === "starting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
+            <img src="/brand/gloo-paw-gold.svg" alt="" className="mb-6 h-24 w-auto" draggable="false" />
             <h1 className="font-display text-5xl leading-[1.02]">Gloo works<br />through your <em className="text-gloo">camera.</em></h1>
             <p className="mt-5 max-w-xs text-sm text-paper/70">Turn on your phone's camera and microphone, or wear your smart glasses, to continue. Point at a hard word and say “gloo it”.</p>
             <button className="btn-light mt-8" disabled={camState === "starting"} onClick={openCamera}><CameraIcon /> {camState === "starting" ? "Opening…" : "Turn on camera and mic"}</button>

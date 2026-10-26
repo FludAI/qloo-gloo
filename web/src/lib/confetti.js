@@ -1,5 +1,5 @@
 // A small burst of confetti on a full-screen canvas, no dependency. Lasts about 1.4 s.
-const COLORS = ["#d9822b", "#f6dfc2", "#2f6f73", "#f6f1e7", "#ffd166"];
+const COLORS = ["#dfaa37", "#f6cb5c", "#2bb8a3", "#f6f1e7", "#c98a12"];
 
 export function confetti({ x = 0.5, y = 0.6, count = 90 } = {}) {
   if (typeof document === "undefined") return;
