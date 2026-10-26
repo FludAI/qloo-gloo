@@ -2,6 +2,7 @@
 // raw microphone samples via Web Audio, downsampled to 16 kHz mono 16-bit PCM.
 // No container format, so nothing depends on which codecs the browser's recorder supports.
 // Falls back to the browser's own speech recognition when the server has no speech service.
+import { createFramer } from "./envelope.js";
 
 const AC = typeof window !== "undefined" && (window.AudioContext || window.webkitAudioContext);
 const SR = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -18,7 +19,9 @@ export async function requestMic() {
 }
 
 // Returns { stop(): { pcm16, seconds, peak } }. pcm16 is base64 of 16 kHz LE samples.
-export async function startPcmRecording() {
+// onLevel(rms, seconds), when given, is called once per ~50 ms frame with the loudness of the learner's voice,
+// so the paw can light a toe per syllable as they speak (envelope.js).
+export async function startPcmRecording({ onLevel } = {}) {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   ctx ??= new AC();
   if (ctx.state === "suspended") await ctx.resume();
@@ -28,10 +31,12 @@ export async function startPcmRecording() {
   mute.gain.value = 0; // processing needs a destination; never play the mic back
   const chunks = [];
   let peak = 0;
+  const framer = onLevel ? createFramer(ctx.sampleRate, (rms, t) => { try { onLevel(rms, t); } catch { /* the listener's problem */ } }) : null;
   proc.onaudioprocess = (e) => {
     const d = e.inputBuffer.getChannelData(0);
     chunks.push(Float32Array.from(d));
     for (let i = 0; i < d.length; i += 16) peak = Math.max(peak, Math.abs(d[i]));
+    framer?.push(d);
   };
   src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
   const started = performance.now();

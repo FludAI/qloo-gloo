@@ -7,8 +7,10 @@ const MAX_SECONDS = 7;
 //   server speech available  -> onPcm({ pcm16 })   (caller sends it to the server)
 //   else browser speech      -> onText({ transcript })
 //   else                     -> mode "none" (caller offers typing)
+// onLevel(rms, seconds): the loudness of the learner's voice per ~50 ms frame while recording (pcm mode only).
+// onListening(bool): the hold started / ended.
 // Returns { mode, listening, holdProps, error }.
-export function useHoldToTalk({ stt, onPcm, onText, onError }) {
+export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListening }) {
   const mode = stt === "google" || stt === "mock" ? (micSupported() ? "pcm" : browserSpeechSupported() ? "browser" : "none")
     : browserSpeechSupported() ? "browser" : "none";
   const [listening, setListening] = useState(false);
@@ -21,7 +23,8 @@ export function useHoldToTalk({ stt, onPcm, onText, onError }) {
     const r = rec.current;
     rec.current = null;
     setListening(false);
-    if (!r) return;
+    if (!r || r.kind === "pending") return; // released before the mic opened: start() sees the slot emptied and stops it
+    onListening?.(false);
     try {
       if (r.kind === "pcm") {
         const { pcm16, seconds, peak } = r.handle.stop();
@@ -34,7 +37,7 @@ export function useHoldToTalk({ stt, onPcm, onText, onError }) {
         await onText?.({ transcript });
       }
     } catch (e) { setError(e.message); onError?.(e); }
-  }, [onPcm, onText, onError]);
+  }, [onPcm, onText, onError, onListening]);
 
   const start = useCallback(async (e) => {
     if (rec.current || mode === "none") return;
@@ -42,8 +45,13 @@ export function useHoldToTalk({ stt, onPcm, onText, onError }) {
     e?.currentTarget?.setPointerCapture?.(e.pointerId);
     setError("");
     try {
-      rec.current = mode === "pcm" ? { kind: "pcm", handle: await startPcmRecording() } : { kind: "browser", handle: startBrowserSpeech() };
+      const claim = { kind: "pending" }; // claim the slot before the await so a second press doesn't start twice
+      rec.current = claim;
+      const r = mode === "pcm" ? { kind: "pcm", handle: await startPcmRecording({ onLevel }) } : { kind: "browser", handle: startBrowserSpeech() };
+      if (rec.current !== claim) { try { r.handle.stop(); } catch { /* fine */ } return; } // released meanwhile
+      rec.current = r;
       setListening(true);
+      onListening?.(true);
       timer.current = setTimeout(stop, MAX_SECONDS * 1000);
     } catch (err) {
       rec.current = null;
@@ -52,7 +60,7 @@ export function useHoldToTalk({ stt, onPcm, onText, onError }) {
         : "Couldn't start the microphone.";
       setError(msg); onError?.(Object.assign(err ?? new Error(msg), { message: msg }));
     }
-  }, [mode, stop, onError]);
+  }, [mode, stop, onError, onLevel, onListening]);
 
   useEffect(() => () => { clearTimeout(timer.current); try { rec.current?.handle?.stop?.(); } catch { /* unmounted */ } }, []);
 

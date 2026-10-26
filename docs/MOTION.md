@@ -120,6 +120,64 @@ Ask: one bar per skill with ticks for the review stages (now, 30 min, 4 h, 1 day
 7 days); a tick lights when a stage is passed; the picks sit as small pictures under the
 bars. Reuse the stickiness meter style for consistency.
 
+## Syllable paw
+
+Decision 26: the gecko paw's toes are syllables. Built 2026-10-26 (`web/src/components/Paw.jsx`).
+
+**Data.** Every whole word and piece carries `ipa_syllables` next to `ipa`: one IPA string per
+syllable, in order (cholecystokinin: koʊ · lɪ · sɪs · toʊ · ˈkaɪ · nɪn; chole: ˈkoʊ · lə). The
+drafter asks the model for it; when it is missing, `server/src/syllables.mjs` splits the IPA on
+dots and stress marks, then on vowel nuclei (a cluster between two vowels leaves one consonant
+behind: sɪs·toʊ). The store validates that the syllables spell the IPA and that their count
+matches a hyphenated respelling (`koh-lih-sis-tuh-KY-nin` is six). A one-word respelling such
+as `cola` is a hook, not a count: chole stays two syllables. Learner packets always carry the
+syllables (stored or split), including the locked packet's `pieces` for the first attempt.
+
+**Machine timing.** `tts.mjs` speaks a word or piece as one `<phoneme>` per syllable with a
+`<mark>` before each, through the v1beta1 endpoint with `enableTimePointing: ["SSML_MARK"]`
+(same Neural2 voice). The returned times are kept in the clip's sidecar as
+`marks: [{ index, piece, syllable, time }]` and travel to the client in the `x-gloo-marks`
+header of `POST /api/say` (base64 JSON); `GET /api/say/timing?text=…&term_id=…` returns the same
+for an existing clip. The new SSML has a new key, so clips made before timing are simply
+synthesized again on the next play; a verified clip keeps playing as pinned, without marks.
+To check on the real voice after a deploy: play "Cholecystokinin" once, then read
+`/api/say/timing` and listen for choppiness between syllables (each syllable is its own
+phoneme element; if Neural2 breaks the word apart, the fallback is one phoneme per word with
+the syllables spread over the word's span, which is what the client already does for clips
+without marks).
+
+**The paw.** `Paw` is the brand mark inline (outline in `paw-path.js`, C2PA metadata
+stripped), toes addressable by index with a glow each. `PawRow` renders ceil(n / 5) paws, toes
+assigned left to right and continuing onto the next paw (six syllables: a full paw and one
+toe). States per toe: off (gold at 16%), heard (gold at 55%), lit (full gold with glow),
+wrong (dim paper, no glow). Light on black only. An idle paw breathes: a slow gold pulse crosses
+the glows every 3.6 s, off under reduced motion; state changes transition in 120 ms.
+
+**With the voice.** `speak()` publishes the current line through `onSpeech()` (its marks, real
+or estimated) and `speechClock()` (the audio element's `currentTime` for a server clip, wall
+time for the browser voice). `useSpokenToes` lights toe k at mark k, reading the clock every
+animation frame, never on a timer. Without marks (browser voice, verified old clips) the
+syllables are spread evenly over the span the word's letters cover in the line, using the
+clip's real length when known. Where: the Together card (the word's six toes; each piece
+lights its own segment while it is spoken, then the whole word lights toe by toe) and the pick
+reveal (the piece's syllables only; a one-syllable piece lights one toe).
+
+**With the learner.** While the mic is held, `audio.js` reports the RMS of every 50 ms frame;
+`envelope.js` finds syllable nuclei (a peak above an adaptive threshold between the noise floor
+and a decaying ceiling, 120 ms refractory, a dip to 60% between peaks) and each one lights the
+next toe "heard", up to the word's count. When the first attempt is scored, each piece's toes
+turn lit or wrong (pieces in role order; a word whose pieces don't account for every syllable
+lights toes in proportion), the paw holds for 1.5 s, then the lesson opens. In practice the
+paw follows the voice the same way but judges only an answer that is the word itself; any
+other answer leaves it idle.
+
+**Fallback and checks.** Tests: `server/test/syllables.test.mjs` (splitting, validation, toe
+assignment for 1, 5, 6 and 11, marks filtering and estimation, peak detection on a synthetic
+envelope) and `tts.test.mjs` / `api.test.mjs` (marks built, timed, stored, served). The
+app's browser pane has no camera or mic and throttles animation frames to about two a second,
+so the paw was checked there with a stubbed camera and a pulsing tone as the voice; real
+timing against the Google voice is checked on the deploy.
+
 ## What to send back
 
 1. The six motion studies as Lottie or SVG+CSS at 600×600, light on black, with their cut

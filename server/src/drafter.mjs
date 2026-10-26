@@ -3,6 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL } from "./agent.mjs";
 import { arr } from "./lessons.mjs";
+import { consistent } from "./syllables.mjs";
 
 const live = () => Boolean(process.env.ANTHROPIC_API_KEY);
 // Current models reject forced tool choice, so the instruction asks for the tool and we check for it.
@@ -40,6 +41,7 @@ const LESSON_TOOL = {
     title: { type: "string" },
     pronunciation_approx: { type: "string", description: "Approximate learner respelling, e.g. koh-lih-sis-tuh-KY-nin" },
     pronunciation_ipa: { type: "string", description: "IPA for the whole term as spoken in US English, no slashes, e.g. ˌkoʊlɪˌsɪstoʊˈkaɪnɪn" },
+    pronunciation_ipa_syllables: { type: "array", items: { type: "string" }, description: "The same IPA split into syllables, one string per syllable, in order, e.g. [\"koʊ\",\"lɪ\",\"sɪs\",\"toʊ\",\"ˈkaɪ\",\"nɪn\"]; as many entries as the respelling has hyphenated parts" },
     summary: { type: "string", description: "One or two sentences. If the term is built from real morphemes, you may open with the meaning inside the word; otherwise lead with the sound hook, then the meaning." },
     definition: { type: "string" },
     components: { type: "array", maxItems: 5, items: { type: "object", properties: {
@@ -53,6 +55,7 @@ const LESSON_TOOL = {
         sound_like: { type: ["string", "null"], description: "The everyday word the part sounds like, e.g. cola; null for meaning-only roles" },
         say: { type: "string", description: "How to say the part, as a respelling a speech engine reads correctly, e.g. koh-lee" },
         ipa: { type: "string", description: "IPA for the part as it sounds inside the term (US English), no slashes, e.g. koʊli" },
+        ipa_syllables: { type: "array", items: { type: "string" }, description: "The part's IPA split into syllables, one string per syllable, e.g. [\"koʊ\",\"li\"]" },
         pick: { type: "object", description: "A favorite-pick: 3-4 well-known public names (brands, films, bands, books, teams) that ALL carry this part's sound or meaning, so any choice works as the cue",
           properties: { question: { type: "string", description: "Short and spoken, e.g. Say your favorite cola." },
             options: { type: "array", minItems: 3, maxItems: 4, items: { type: "object", properties: {
@@ -80,6 +83,9 @@ const LESSON_TOOL = {
 const clip = (s, n) => String(s ?? "").slice(0, n);
 // IPA from the model: letters, IPA symbols, stress and length marks only; slashes and brackets dropped; null when empty.
 const ipa = (s) => { const v = String(s ?? "").replace(/[/[\]]/g, "").replace(/[^\p{L}\p{M}ˈˌːˑ.‿ ]/gu, "").trim().slice(0, 60); return v || null; };
+// Syllables from the model: each entry cleaned like IPA, kept only when they spell the IPA they came with;
+// null otherwise (the splitter in syllables.mjs takes over).
+const ipaSyllables = (v, whole) => { const list = arr(v).map(ipa).filter(Boolean).slice(0, 16); return list.length && consistent(whole, list) ? list : null; };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "role";
 
 // Packets are stored as JSON with accept lists and compiled on load; the compiler lives with the store.
@@ -93,7 +99,7 @@ function shape(id, input, d, origin) {
   const components = arr(d.components).slice(0, 5).map((c) => ({ part: clip(c.part, 30), meaning: clip(c.meaning, 80), cue: c.cue ? clip(c.cue, 120) : "—" }));
   const roles = arr(d.roles).slice(0, 4).map((r) => ({
     id: slug(r.id), label: clip(r.label, 50), part: clip(r.part, 30) || clip(r.label, 30), meaning: clip(r.meaning, 60), sound_like: r.sound_like ? clip(r.sound_like, 30) : null,
-    say: r.say ? clip(r.say, 40) : null, ipa: ipa(r.ipa),
+    say: r.say ? clip(r.say, 40) : null, ipa: ipa(r.ipa), ipa_syllables: ipaSyllables(r.ipa_syllables, ipa(r.ipa)),
     target: clip(r.target, 80), look_for: clip(r.look_for, 120),
     pick: arr(r.pick?.options).length ? { question: clip(r.pick.question, 80), options: arr(r.pick.options).slice(0, 4).map((o) => ({ name: clip(o.name, 40), wiki: o.wiki ? clip(o.wiki, 80) : null, say: [], qloo: null, connection: clip(o.connection, 160) })) } : undefined,
   }));
@@ -108,7 +114,7 @@ function shape(id, input, d, origin) {
     id, version: "draft-1", provisional: true, origin,
     review: { status: "provisional", reviewed_at: null },
     title, aliases: [input],
-    pronunciation: { approx: clip(d.pronunciation_approx, 60) || "—", ipa: ipa(d.pronunciation_ipa), note: "Approximate. Not reviewed." },
+    pronunciation: { approx: clip(d.pronunciation_approx, 60) || "—", ipa: ipa(d.pronunciation_ipa), ipa_syllables: ipaSyllables(d.pronunciation_ipa_syllables, ipa(d.pronunciation_ipa)), note: "Approximate. Not reviewed." },
     summary: clip(d.summary, 400), definition: clip(d.definition, 400),
     components: components.length ? components : undefined,
     distinctions: arr(d.distinctions).slice(0, 4).map((x) => clip(x, 240)),

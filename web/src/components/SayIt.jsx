@@ -3,7 +3,8 @@ import { useHoldToTalk } from "../lib/talk.js";
 import { MicIcon } from "./Icons.jsx";
 
 // Hold-to-talk that yields text: server speech when available, else the browser's. Hidden when neither exists.
-export default function SayIt({ health, guard, onText, big = false, label }) {
+// onLevel / onListening feed the syllable paw while the learner speaks (see Paw.jsx).
+export default function SayIt({ health, guard, onText, onLevel, onListening, big = false, label }) {
   const talk = useHoldToTalk({
     stt: health?.stt,
     onPcm: ({ pcm16 }) => guard(async () => {
@@ -12,6 +13,7 @@ export default function SayIt({ health, guard, onText, big = false, label }) {
       onText(r.transcript);
     }),
     onText: ({ transcript }) => onText(transcript),
+    onLevel, onListening,
   });
   if (talk.mode === "none") return <p className="text-center text-sm text-paper/60">This browser has no microphone access. Open Gloo on a phone.</p>;
   return (

@@ -3,6 +3,7 @@ import SayIt from "./SayIt.jsx";
 import { speak, hush } from "../lib/speak.js";
 import { sfx } from "../lib/sfx.js";
 import { flashRing } from "./Motion.jsx";
+import { SpokenPaw } from "./Paw.jsx";
 
 // One sound piece, one square of four pictures, one spoken line. The learner says their favorite
 // (any answer counts, listed or not). Lock-in: the pick flashes a ring and snaps to its slot; then
@@ -66,6 +67,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
             <div className={a ? "rise" : ""}><Picture src={art} name={reveal.label} big custom={reveal.custom} /></div>
             <div className="flex flex-col items-center justify-center text-center">
               <div className={`font-display text-[2.6rem] leading-none text-gloo ${a ? "rise" : ""}`} style={a ? { animationDelay: ".7s" } : undefined}>{role.part}</div>
+              <SpokenPaw term={term} piece={role} size={40} className={`mt-1 ${a ? "fade-in" : ""}`} />
               {role.sound_like && <div className={`mt-2 font-mono text-sm text-paper/70 ${a ? "fade-in pulse-word" : ""}`} style={a ? { animationDelay: "1.2s, 1.5s" } : undefined}>≈ {role.sound_like}</div>}
               <div className={`mt-4 text-xl font-medium ${a ? "fade-in" : ""}`} style={a ? { animationDelay: "2.4s" } : undefined}>{role.meaning}</div>
             </div>
