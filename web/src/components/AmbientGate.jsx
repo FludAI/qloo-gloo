@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { CameraIcon } from "./Icons.jsx";
+import { CameraIcon, PictureIcon, ScreenIcon } from "./Icons.jsx";
+import { canShareScreen, isPhone } from "../lib/device.js";
 import { reducedMotion } from "../lib/sfx.js";
 
 // The gate, alive: behind the copy, the lesson loop plays on its own (a word on paper, the frame,
@@ -21,9 +22,15 @@ const CORNERS = [
 ];
 const EASE = "cubic-bezier(.16,1,.3,1)", SNAP = "cubic-bezier(.3,1.5,.5,1)";
 
-export default function AmbientGate({ state, onStart }) {
+export default function AmbientGate({ state, source, onStart, onPick }) {
   const root = useRef(null);
   const blocked = state === "denied" || state === "unavailable";
+  // A phone looks at paper through its camera. A desktop's webcam faces the wrong way, and the word is
+  // usually on its own screen, so it shares that window; the webcam and a picture stay one tap away.
+  const phone = isPhone(), screen = canShareScreen();
+  const main = phone || !screen ? "camera" : "screen";
+  const file = useRef(null);
+  const pick = (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onPick?.(f); };
 
   useEffect(() => {
     const r = root.current;
@@ -99,18 +106,27 @@ export default function AmbientGate({ state, onStart }) {
         <div className="flex w-full max-w-[460px] flex-[1_1_380px] flex-col items-center gap-5 text-center">
           <img data-a="copy" src="/brand/gloo-paw-gold.svg" alt="" className="h-12 w-auto opacity-0 sm:h-16" draggable="false" />
           <h1 data-a="copy" className="font-display leading-[1.02] opacity-0" style={{ fontSize: "clamp(44px, 5.2vw, 60px)", letterSpacing: "-0.01em" }}>
-            {blocked ? (state === "denied" ? "Gloo needs the camera." : "No camera found.") : <>Gloo works<br />through your <em className="text-gloo">camera.</em></>}
+            {blocked ? (state === "denied" ? (source === "screen" ? "Gloo needs to see the word." : "Gloo needs the camera.") : "No camera found.")
+              : main === "screen" ? <>Gloo works<br />on your <em className="text-gloo">screen.</em></> : <>Gloo works<br />through your <em className="text-gloo">camera.</em></>}
           </h1>
           <p data-a="copy" className="max-w-[330px] text-[15px] leading-relaxed text-paper/80 opacity-0">
-            {state === "denied" ? "Allow the camera and microphone for this site in your browser settings, then try again."
-              : state === "unavailable" ? "Open this on a phone, or on glasses with a camera."
+            {state === "denied" ? (source === "screen" ? "Pick the window with the hard word when the browser asks, and allow the microphone. Or use a picture of the word." : "Allow the camera and microphone for this site in your browser settings, then try again.")
+              : state === "unavailable" ? "Open this on a phone, or on glasses with a camera. Or use a picture of the word."
+              : main === "screen" ? "Share the window with the hard word and turn on your microphone. Drag the word into the frame and say “gloo it”."
               : "Turn on your phone's camera and microphone, or wear your smart glasses, to continue. Point at a hard word and say “gloo it”."}
           </p>
           <div data-a="copy" className="flex flex-col items-center gap-3 opacity-0">
-            <button className="btn-light" disabled={state === "starting"} onClick={onStart}>
-              <CameraIcon /> {state === "starting" ? "Waiting for permission…" : blocked ? "Try again" : "Turn on camera and mic"}
+            <button className="btn-light" disabled={state === "starting"} onClick={() => onStart(blocked && source ? source : main)}>
+              {main === "screen" ? <ScreenIcon /> : <CameraIcon />} {state === "starting" ? "Waiting for permission…" : blocked ? "Try again" : main === "screen" ? "Share screen and mic" : "Turn on camera and mic"}
             </button>
-            <div className="min-h-[18px] text-[13px] text-paper/70">{state === "starting" ? "Allow both in the prompt." : ""}</div>
+            <div className="min-h-[18px] text-[13px] text-paper/70">{state === "starting" ? "Allow it in the prompt." : ""}</div>
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[13px] text-paper/70">
+              {main === "screen" && <button className="underline underline-offset-2" disabled={state === "starting"} onClick={() => onStart("camera")}>Use the webcam</button>}
+              {!phone && screen && main !== "screen" && <button className="underline underline-offset-2" disabled={state === "starting"} onClick={() => onStart("screen")}>Share a window</button>}
+              <button className="inline-flex items-center gap-1 underline underline-offset-2" disabled={state === "starting"} onClick={() => file.current?.click()}><PictureIcon size={16} /> {phone ? "Take a picture instead" : "Use a picture"}</button>
+              {!phone && <span className="text-paper/50">or paste a screenshot</span>}
+            </div>
+            <input ref={file} type="file" accept="image/*" capture={phone ? "environment" : undefined} className="hidden" onChange={pick} />
           </div>
         </div>
       </div>

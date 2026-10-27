@@ -7,9 +7,11 @@ import AmbientGate from "./components/AmbientGate.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
-import { CameraIcon, CloseIcon, InfoIcon, LockIcon, MicIcon } from "./components/Icons.jsx";
+import { CameraIcon, CloseIcon, InfoIcon, LockIcon, MicIcon, PictureIcon } from "./components/Icons.jsx";
+import { imageFrom, isPhone } from "./lib/device.js";
 
-// Gloo is a camera. Camera and mic on (phone or glasses), or you don't proceed. No typing anywhere.
+// Gloo is a camera. Camera and mic on (phone or glasses), or a shared window on a desktop, or a picture of
+// the word; you don't proceed without one of them. No typing anywhere.
 // Frame a word and tap, or hold the mic and say it. The scan sweeps the frame, drops a tick per
 // piece it finds, then the lesson rises as cards over the viewfinder.
 export default function App() {
@@ -18,6 +20,8 @@ export default function App() {
   const [terms, setTerms] = useState([]);
   const [camState, setCamState] = useState("idle");
   const [micGranted, setMicGranted] = useState(false);
+  const [source, setSource] = useState(null); // camera | screen | image
+  const picker = useRef(null);
   const [busy, setBusy] = useState("");
   const [scan, setScan] = useState(null);
   const [toast, setToast] = useState("");
@@ -62,7 +66,7 @@ export default function App() {
   const frame = () => cam.current?.capture() ?? null;
   const glueFrame = () => {
     const f = frame();
-    if (!f) return say("Point the camera at a word first.");
+    if (!f) return say(source === "camera" ? "Point the camera at a word first." : "Move the word into the frame first.");
     glue({ mode: "camera", ...f }, "Reading…");
   };
   const talk = useHoldToTalk({
@@ -71,8 +75,18 @@ export default function App() {
     onText: ({ transcript }) => glue({ mode: "voice", text: transcript, ...(frame() ?? {}) }, "Listening…"),
   });
 
-  const openCamera = () => { warmAudio(); unlockAudio(); cam.current?.start(); };
-  const onCamState = (s, extra) => { setCamState(s); if (s === "live") setMicGranted(Boolean(extra?.mic)); };
+  const openCamera = (which = "camera") => { warmAudio(); unlockAudio(); cam.current?.start(which); };
+  const showPicture = (file) => { if (!file) return; warmAudio(); unlockAudio(); cam.current?.show(file); };
+  const onCamState = (s, extra) => { setCamState(s); setSource(extra?.source ?? null); if (s === "live") setMicGranted((m) => m || Boolean(extra?.mic)); };
+  // A screenshot pasted or an image dropped anywhere on the page is the word.
+  useEffect(() => {
+    const onPaste = (e) => { const f = imageFrom(e.clipboardData); if (f) { e.preventDefault(); showPicture(f); } };
+    const onDrop = (e) => { e.preventDefault(); const f = imageFrom(e.dataTransfer); if (f) showPicture(f); };
+    const onDrag = (e) => { if ([...(e.dataTransfer?.types ?? [])].includes("Files")) e.preventDefault(); };
+    window.addEventListener("paste", onPaste); window.addEventListener("drop", onDrop); window.addEventListener("dragover", onDrag);
+    return () => { window.removeEventListener("paste", onPaste); window.removeEventListener("drop", onDrop); window.removeEventListener("dragover", onDrag); };
+  }, []);
+  const pickFile = (e) => { const f = e.target.files?.[0]; e.target.value = ""; showPicture(f); };
   const live = camState === "live";
   const locked = health?.gated && !health?.unlocked;
 
@@ -87,11 +101,11 @@ export default function App() {
           </div>
         </div>
 
-        {!live && <AmbientGate state={camState} onStart={openCamera} />}
+        {!live && <AmbientGate state={camState} source={source} onStart={openCamera} onPick={showPicture} />}
 
         {live && (<>
           <p className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-paper/80" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 2.2rem)" }}>
-            {busy || (talk.listening ? "Listening… release when done" : "Frame the word and tap, or hold the mic and say it.")}
+            {busy || (talk.listening ? "Listening… release when done" : source === "camera" ? "Frame the word and tap, or hold the mic and say it." : "Drag the word into the frame, then tap or hold the mic and say it.")}
           </p>
           {terms.length > 0 && !sheet && (
             <div className="absolute inset-x-0 z-10 flex gap-2 overflow-x-auto px-4 pb-1" style={{ bottom: "calc(8.5rem + env(safe-area-inset-bottom))", scrollbarWidth: "none" }}>
@@ -103,7 +117,8 @@ export default function App() {
             </div>
           )}
           <div className="safe-bottom absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-8 px-6">
-            <span className="h-14 w-14" />
+            <button className="round" aria-label={isPhone() ? "Take a picture of the word" : "Use a picture of the word"} disabled={!!busy} onClick={() => picker.current?.click()}><PictureIcon /></button>
+            <input ref={picker} type="file" accept="image/*" capture={isPhone() ? "environment" : undefined} className="hidden" onChange={pickFile} />
             <button className="shutter" aria-label="Gloo it: read the framed word" disabled={!!busy || talk.listening} onClick={glueFrame}>
               <span className="font-display text-xl">Gloo it</span>
             </button>
