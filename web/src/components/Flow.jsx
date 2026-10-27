@@ -29,6 +29,7 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
   const current = steps[Math.min(step, steps.length - 1)];
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
+  useEffect(() => { if (current === "progress") refresh(); }, [current, refresh]); // the hooks line counts this lesson's picks
 
   const pickFor = (roleId) => chosen.find((c) => c.role === roleId);
   const onPicked = async (role, o) => {
@@ -212,6 +213,7 @@ function Skills({ progress, chosen, term, roles }) {
           ))}
         </div>
       )}
+      {progress?.hooks?.line && <p className="mt-3 text-xs text-paper/60">{progress.hooks.line}</p>}
       <p className="mt-3 text-xs text-paper/50">Review stages: now, 30 min, 4 h, 1 day, 3 days, 7 days. Hinted answers don't count as on your own.</p>
     </section>
   );

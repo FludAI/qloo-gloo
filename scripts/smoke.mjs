@@ -50,4 +50,29 @@ if (process.env.SMOKE_QLOO === "1") {
 } else {
   console.log("skipped: Qloo describe and agent (set SMOKE_QLOO=1 to run them; they spend event credit on a cache miss)");
 }
+
+if (process.env.SMOKE_TASTE === "1") {
+  // The taste loop: two picks (Pepsi, Twisted Sister), then the cholecystokinin pick cards ranked for them.
+  // Spends up to 2 describes + 4 ranks on a cache miss; everything is cached after that.
+  await call("POST", "/api/terms/cholecystokinin/first-attempt", { skipped: true });
+  const pick = async (roleId, name) => {
+    const role = (await call("GET", "/api/terms/cholecystokinin")).body.roles.find((r) => r.id === roleId);
+    const o = role.pick.options.find((x) => x.name === name);
+    const cues = (await call("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: roleId, label: o.name, connection: o.connection, source: "pick", recognized: true })).body;
+    return cues.find((c) => c.role === roleId);
+  };
+  const a = await pick("chole", "Pepsi-Cola"), b = await pick("cysto", "Twisted Sister");
+  console.log(`picks -> ${a.label} [${a.qloo_entity_id ?? "no id"}] ${a.hook_source}, ${b.label} [${b.qloo_entity_id ?? "no id"}] ${b.hook_source}`);
+  const term = (await call("GET", "/api/terms/cholecystokinin")).body;
+  for (const r of term.roles) if (r.pick) console.log(`   ${r.id.padEnd(6)} ${r.pick.tailoring.source.padEnd(9)} ${r.pick.options.map((o) => o.taste != null ? `${o.name} (${o.taste})` : o.name).join(" · ")}${r.pick.tailoring.reason ? ` · ${r.pick.tailoring.reason}` : ""}`);
+  const ranked = term.roles.filter((r) => r.pick?.tailoring.source === "taste");
+  ok(ranked.length > 0, "at least one pick card ranked for the learner's taste");
+  const inRole = term.roles.find((r) => r.id === "in");
+  const c = await pick("in", inRole.pick.options[0].name);
+  const hooks = (await call("GET", "/api/progress/cholecystokinin")).body.hooks;
+  console.log(`third pick -> ${c.label} ${c.hook_source} at ${c.shown_rank}; progress: ${hooks.line}`);
+  ok(hooks.term.total === 3, "progress counts the three hooks");
+} else {
+  console.log("skipped: taste loop (set SMOKE_TASTE=1; two picks and up to six Qloo calls on a cache miss)");
+}
 await call("DELETE", "/api/learner");

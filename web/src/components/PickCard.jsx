@@ -87,7 +87,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
       <div className="stage">
         <div className="grid h-full grid-cols-2 gap-3">
           {role.pick.options.slice(0, 4).map((o) => (
-            <button key={o.name} ref={(n) => { tiles.current[o.name] = n; }} className={`tile-img ${picking && picking !== o.name ? "fall-back" : ""}`} disabled={!!picking} onClick={() => choose(o.name, o)} aria-label={o.name}>
+            <button key={o.name} ref={(n) => { tiles.current[o.name] = n; }} className={`tile-img ${picking && picking !== o.name ? "fall-back" : ""} ${o.taste != null ? "ring-1 ring-gloo/60" : ""}`} disabled={!!picking} onClick={() => choose(o.name, o)} aria-label={o.name} data-taste={o.taste ?? undefined}>
               <Picture src={o.wiki ? `/api/art?t=${encodeURIComponent(o.wiki)}` : null} name={o.name} />
               <span className="tile-cap">{o.name}</span>
             </button>

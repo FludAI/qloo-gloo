@@ -42,5 +42,17 @@ export function mockQloo(op, args) {
       explanation: "Fixture: shares signal tags with the confirmed taste profile.",
     })), `Mock: ${t} recommendations for the confirmed tags`);
   }
+  if (op === "rank") {
+    // Deterministic and visible: the supplied options come back in reverse alphabetical order, so a tailored
+    // pick card is easy to tell from the editorial one in tests. Each result names the option it scores.
+    const t = args.option_type ?? "brand";
+    const options = [...new Set((args.options ?? []).map(String))].sort((a, b) => b.localeCompare(a));
+    const title = (s) => s.replace(/^mock-/, "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return base("rank", options.map((option, i) => ({
+      entity_id: option.startsWith("mock-") ? option : `mock-${option.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      name: option.startsWith("mock-") ? title(option) : option, option, type: `urn:entity:${t}`,
+      affinity: Number((0.95 - i * 0.1).toFixed(2)), explanation: "Fixture: ranked against the signals.",
+    })), `Mock: ${options.length} ${t} options ranked for ${(args.signals ?? []).length} signals`);
+  }
   return base(op, [], `Mock: no fixture for ${op}`);
 }

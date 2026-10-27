@@ -13,6 +13,14 @@ const buckets = new Map();
 let globalAgent = { day: new Date().toDateString(), n: 0 };
 let globalQloo = { day: new Date().toDateString(), n: 0 };
 
+// How many calls the day's global budget still allows (qloo only; other kinds are per session).
+export function remaining(kind) {
+  if (kind !== "qloo") return Infinity;
+  const today = new Date().toDateString();
+  if (globalQloo.day !== today) globalQloo = { day: today, n: 0 };
+  return Math.max(0, LIMITS.qloo_global - globalQloo.n);
+}
+
 export function take(kind, sid) {
   if (kind === "qloo") {
     // Event credits are finite: a hard daily cap across all visitors (cache hits never reach here).

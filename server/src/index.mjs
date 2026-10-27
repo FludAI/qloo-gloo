@@ -25,6 +25,7 @@ import { ttsMode, speaker, VOICE } from "./tts.mjs";
 import { media } from "./media.mjs";
 import { scorePieces, termPieces } from "./resolve/pieces.mjs";
 import { DOMAIN_TERMS } from "./resolve/domain-terms.mjs";
+import { loadEntities, knownEntities, resolveEntity, tailorTerm, hookSourceFor, hooksSummary, signalsFor, MIN_PICKS, RESERVE as TASTE_RESERVE } from "./taste.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
@@ -53,6 +54,7 @@ async function refreshContent() {
   SPEECH_HINTS = [...new Set(["gloo it", ...listTerms().flatMap((t) => [t.title.replace(/\s*\(.*?\)\s*/g, " ").trim(), ...(t.aliases ?? [])]), ...DOMAIN_TERMS])];
 }
 await refreshContent();
+await loadEntities(); // Qloo IDs the packets' entities resolved to, from the media store
 
 // A term is either a reviewed packet or this learner's own provisional draft.
 function termFor(sid, id) {
@@ -135,6 +137,7 @@ app.get("/api/health", wrap(async (req, res) => {
   const stt = MOCK ? "mock" : await sttMode();
   const [tts, mediaMode] = await Promise.all([ttsMode(), media.mode()]);
   res.json({ qloo, agent, stt, tts, voice: tts === "google" ? VOICE : null, media: mediaMode, camera: agentMode() === "live" ? "live" : MOCK ? "mock" : "unavailable",
+    taste: { signals: signalsFor(req.sid).length, min_picks: MIN_PICKS, reserve: TASTE_RESERVE, entities: knownEntities() },
     gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), admin: Boolean(ADMIN_TOKEN), lessons: listTerms().length, engine: ENGINE, schedule_policy: POLICY.version,
     unavailable: ["pronunciation scoring", "glasses input", "rewards", "encounter detection"] });
 }));
@@ -154,15 +157,18 @@ app.get("/api/terms", (req, res) => res.json([
   ...q.provisionalFor.all(req.sid).map((r) => { const p = JSON.parse(r.packet); return { id: r.id, title: p.title, summary: p.summary, provisional: true, origin: r.origin }; }),
 ]));
 
-app.get("/api/terms/:id", (req, res) => {
+app.get("/api/terms/:id", wrap(async (req, res) => {
   const t = termFor(req.sid, req.params.id);
   if (!t) return res.status(404).json({ error: "unknown term" });
   const first = q.getFirst.get(req.sid, t.id);
   // The lesson unlocks only after the first attempt is saved or explicitly skipped.
   if (!first) return res.json({ id: t.id, title: t.title, first_attempt: t.first_attempt, locked: true, pronunciation: t.pronunciation,
     pieces: (t.roles ?? []).filter((r) => r.part).map((r) => ({ part: r.part, say: r.say ?? null, ipa_syllables: r.ipa_syllables ?? null })) });
-  res.json({ ...publicTerm(t), locked: false, first_attempt_record: { ...first, pieces: first.pieces ? JSON.parse(first.pieces) : null } });
-});
+  // The pick cards are ranked for this learner's taste (taste.mjs): same options, the likeliest favorites first.
+  // Qloo spends credit, so like the other metered paths it waits for the passcode; a locked session sees the editorial order.
+  const shown = unlocked(req.sid) || isOwner(req) ? await tailorTerm(t, req.sid, (op, args) => runQloo(req.sid, op, args)) : t;
+  res.json({ ...publicTerm(shown), locked: false, first_attempt_record: { ...first, pieces: first.pieces ? JSON.parse(first.pieces) : null } });
+}));
 
 app.post("/api/terms/:id/first-attempt", (req, res) => {
   const t = termFor(req.sid, req.params.id);
@@ -367,7 +373,7 @@ app.post("/api/glue", wrap(async (req, res) => {
     resolution: { input: text, mode: captured, word: best.word, method, score: best.score, decision: local.decision }, alternatives });
 }));
 
-app.post("/api/learner/cues", (req, res) => {
+app.post("/api/learner/cues", wrap(async (req, res) => {
   const t = termFor(req.sid, req.body?.term_id);
   if (!t) return res.status(404).json({ error: "unknown term" });
   const b = req.body;
@@ -379,9 +385,20 @@ app.post("/api/learner/cues", (req, res) => {
   const pii = findPersonalData([label, connection]);
   if (pii) return res.status(400).json({ error: `That looks like a ${pii}.` });
   const source = ["editorial", "qloo-grounded", "agent (no verified Qloo ID)", "learner", "synthetic", "pick"].includes(b.source) ? b.source : "learner";
-  q.addCue.run(req.sid, t.id, b.role, label, connection, source, b.qloo_entity_id ?? null, b.qloo_entity_type ?? null, 1, Date.now());
+  let entityId = b.qloo_entity_id ?? null, entityType = b.qloo_entity_type ?? null, entityName = null, hook = null, rank = null;
+  if (source === "pick") {
+    // A favorite pick is a taste signal: the packet says which public entity it stands for (the browser's word is not
+    // trusted), its Qloo ID is resolved once, and the card it was picked from says whether the hook came from taste.
+    const { option, hook_source, shown_rank } = hookSourceFor(req.sid, t, b.role, label);
+    hook = hook_source; rank = shown_rank;
+    entityName = option?.qloo?.entity ?? null; entityType = option?.qloo?.type ?? null;
+    // Resolving spends a credit, so a locked session only gets an ID the server already knows.
+    const live = unlocked(req.sid) || isOwner(req);
+    entityId = entityName ? await resolveEntity((op, args) => runQloo(req.sid, op, args), entityName, entityType, live ? {} : { budget: () => 0 }) : null;
+  }
+  q.addCue.run(req.sid, t.id, b.role, label, connection, source, entityId, entityType, 1, Date.now(), entityName, hook, rank);
   res.json(q.cuesFor.all(req.sid, t.id));
-});
+}));
 
 app.patch("/api/learner/cues/:id", (req, res) => {
   const connection = String(req.body?.connection ?? "").trim().slice(0, 240);
@@ -453,7 +470,7 @@ app.get("/api/progress/:termId", (req, res) => {
     skills[skill] = deriveSkill(attempts.filter((a) => a.skill === skill), Date.now());
   }
   skills.pronunciation = { state: "not assessed", note: "Speech scoring is not configured in this build." };
-  res.json({ term_id: t.id, provisional: Boolean(t.provisional), skills, first_attempt: q.getFirst.get(req.sid, t.id) ?? null });
+  res.json({ term_id: t.id, provisional: Boolean(t.provisional), skills, first_attempt: q.getFirst.get(req.sid, t.id) ?? null, hooks: hooksSummary(req.sid, t.id) });
 });
 
 // ---- The app's voice: plain text in, MP3 out. The server wraps the term's pieces in IPA; a clip is

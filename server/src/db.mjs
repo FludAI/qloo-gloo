@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS provisional_terms (
 CREATE TABLE IF NOT EXISTS resolutions (
   id INTEGER PRIMARY KEY, sid TEXT NOT NULL, mode TEXT NOT NULL, input TEXT NOT NULL, resolved TEXT, term_id TEXT,
   method TEXT, score REAL, decision TEXT, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS pick_offers (
+  sid TEXT NOT NULL, term_id TEXT NOT NULL, role TEXT NOT NULL, tailored INTEGER NOT NULL, options TEXT NOT NULL, signals TEXT NOT NULL, at INTEGER NOT NULL,
+  PRIMARY KEY (sid, term_id, role));
 CREATE TABLE IF NOT EXISTS provider_calls (
   id INTEGER PRIMARY KEY, sid TEXT, provider TEXT NOT NULL, op TEXT NOT NULL, status TEXT NOT NULL, cache TEXT, duration_ms REAL, created_at INTEGER NOT NULL);
 `);
@@ -41,6 +44,15 @@ if (!db.prepare("PRAGMA table_info(learners)").all().some((c) => c.name === "unl
 
 if (!db.prepare("PRAGMA table_info(first_attempts)").all().some((c) => c.name === "pieces")) {
   db.exec("ALTER TABLE first_attempts ADD COLUMN pieces TEXT");
+}
+
+// The taste loop (taste.mjs): which packet entity a pick stands for, whether the card it came from was ranked
+// for this learner (hook_source: taste | editorial | own), and where on the card the pick sat.
+{
+  const cols = db.prepare("PRAGMA table_info(learner_cues)").all().map((c) => c.name);
+  for (const [col, type] of [["qloo_entity", "TEXT"], ["hook_source", "TEXT"], ["shown_rank", "INTEGER"]]) {
+    if (!cols.includes(col)) db.exec(`ALTER TABLE learner_cues ADD COLUMN ${col} ${type}`);
+  }
 }
 
 export const q = {
@@ -64,9 +76,17 @@ export const q = {
   openHint: db.prepare("SELECT rowid FROM hint_exposures WHERE sid = ? AND prompt_id = ? AND consumed = 0 LIMIT 1"),
   addHint: db.prepare("INSERT INTO hint_exposures (sid, prompt_id, created_at) VALUES (?, ?, ?)"),
   consumeHints: db.prepare("UPDATE hint_exposures SET consumed = 1 WHERE sid = ? AND prompt_id = ?"),
-  cuesFor: db.prepare("SELECT id, term_id, role, label, connection, source, qloo_entity_id, qloo_type, created_at FROM learner_cues WHERE sid = ? AND term_id = ? AND removed_at IS NULL ORDER BY created_at"),
-  addCue: db.prepare(`INSERT INTO learner_cues (sid, term_id, role, label, connection, source, qloo_entity_id, qloo_type, recognized, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+  cuesFor: db.prepare("SELECT id, term_id, role, label, connection, source, qloo_entity_id, qloo_type, hook_source, shown_rank, created_at FROM learner_cues WHERE sid = ? AND term_id = ? AND removed_at IS NULL ORDER BY created_at"),
+  addCue: db.prepare(`INSERT INTO learner_cues (sid, term_id, role, label, connection, source, qloo_entity_id, qloo_type, recognized, created_at, qloo_entity, hook_source, shown_rank)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+  // Taste signals: the distinct public entities behind this learner's favorite picks, newest first (ID when known, else the packet's name).
+  pickSignals: db.prepare(`SELECT qloo_entity_id, qloo_entity, qloo_type, MAX(created_at) AS at FROM learner_cues
+    WHERE sid = ? AND removed_at IS NULL AND source = 'pick' AND (qloo_entity_id IS NOT NULL OR qloo_entity IS NOT NULL)
+    GROUP BY COALESCE(qloo_entity_id, qloo_entity) ORDER BY at DESC LIMIT 10`),
+  putOffer: db.prepare("INSERT OR REPLACE INTO pick_offers (sid, term_id, role, tailored, options, signals, at) VALUES (?, ?, ?, ?, ?, ?, ?)"),
+  getOffer: db.prepare("SELECT tailored, options, signals, at FROM pick_offers WHERE sid = ? AND term_id = ? AND role = ?"),
+  hooksFor: db.prepare("SELECT hook_source, COUNT(*) AS n FROM learner_cues WHERE sid = ? AND term_id = ? AND removed_at IS NULL AND source = 'pick' GROUP BY hook_source"),
+  hooksAll: db.prepare("SELECT hook_source, COUNT(*) AS n FROM learner_cues WHERE sid = ? AND removed_at IS NULL AND source = 'pick' GROUP BY hook_source"),
   editCue: db.prepare("UPDATE learner_cues SET connection = ? WHERE id = ? AND sid = ? AND removed_at IS NULL"),
   removeCue: db.prepare("UPDATE learner_cues SET removed_at = ? WHERE id = ? AND sid = ?"),
   logCall: db.prepare("INSERT INTO provider_calls (sid, provider, op, status, cache, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"),
@@ -76,13 +96,13 @@ export const q = {
 export function exportLearner(sid) {
   const all = (t) => db.prepare(`SELECT * FROM ${t} WHERE sid = ?`).all(sid);
   return { first_attempts: all("first_attempts"), attempts: all("attempts"), learner_cues: all("learner_cues"),
-    provisional_terms: all("provisional_terms"), resolutions: all("resolutions"), provider_calls: all("provider_calls") };
+    provisional_terms: all("provisional_terms"), resolutions: all("resolutions"), provider_calls: all("provider_calls"), pick_offers: all("pick_offers") };
 }
 
 export function deleteLearner(sid) {
   db.exec("BEGIN");
   try {
-    for (const t of ["first_attempts", "attempts", "hint_exposures", "learner_cues", "provisional_terms", "resolutions", "provider_calls", "learners"]) {
+    for (const t of ["first_attempts", "attempts", "hint_exposures", "learner_cues", "provisional_terms", "resolutions", "provider_calls", "pick_offers", "learners"]) {
       db.prepare(`DELETE FROM ${t} WHERE sid = ?`).run(sid);
     }
     db.exec("COMMIT");

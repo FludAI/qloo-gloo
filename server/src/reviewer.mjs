@@ -19,7 +19,7 @@ export const PRODUCT_RULES = `Product rules for a Gloo lesson (the app speaks ev
 5. Minimal, speakable text: the summary is one or two short spoken sentences; pick questions are short spoken questions ("Say your favorite cola."); no symbols a voice would read badly (≈ → + = /). Hints and questions stay short.
 6. Be accurate; never invent etymology, sources or Wikipedia titles.`;
 
-const SOUND = 0.75; // the same bar pieces.mjs uses for "said"
+export const SOUND = 0.75; // the same bar pieces.mjs uses for "said"
 const clip = (s, n) => String(s ?? "").slice(0, n);
 const proposal = (path, before, reason, severity, after = null) => ({ path, before: before === undefined ? null : before, after, reason, severity });
 

@@ -178,6 +178,71 @@ test("a favorite pick is saved as the learner's cue for that role", async () => 
   assert.equal(list[0].label, o.name);
 });
 
+test("taste: two picks become Qloo signals and the next pick cards are ranked for them", async () => {
+  const s = session();
+  await s("POST", "/api/terms/cholecystokinin/first-attempt", { skipped: true });
+  const before = (await s("GET", "/api/terms/cholecystokinin")).body;
+  // Under two picks, every card is editorial and no Qloo call is made.
+  assert.ok(before.roles.every((r) => !r.pick || r.pick.tailoring.source === "editorial"));
+  assert.equal(before.roles.find((r) => r.id === "in").pick.tailoring.reason, "fewer than two picks");
+  assert.equal((await s("GET", "/api/diagnostics")).body.calls.length, 0);
+  assert.equal((await s("GET", "/api/health")).body.taste.signals, 0);
+
+  const pick = async (roleId, name) => {
+    const role = (await s("GET", "/api/terms/cholecystokinin")).body.roles.find((r) => r.id === roleId);
+    const o = role.pick.options.find((x) => x.name === name);
+    return (await s("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: roleId, label: o.name, connection: o.connection, source: "pick", recognized: true, qloo_entity_id: null, qloo_entity_type: o.qloo?.type })).body;
+  };
+  let cues = await pick("chole", "Pepsi-Cola");
+  // The packet, not the browser, says which entity the pick stands for; its ID is resolved once (mock describe).
+  assert.equal(cues[0].qloo_entity_id, "mock-pepsi"); assert.equal(cues[0].qloo_type, "brand");
+  assert.equal(cues[0].hook_source, "editorial"); assert.equal(cues[0].shown_rank, 1);
+  cues = await pick("cysto", "Twisted Sister");
+  assert.equal(cues[1].qloo_entity_id, "mock-twisted-sister");
+  assert.equal((await s("GET", "/api/health")).body.taste.signals, 2);
+
+  const after = (await s("GET", "/api/terms/cholecystokinin")).body;
+  const by = (id) => after.roles.find((r) => r.id === id).pick;
+  // -in: the brand pair (Aspirin = Bayer, Penguin = Penguin Books) is ranked by the mock (reverse alphabetical), the film and the book follow in editorial order.
+  assert.equal(by("in").tailoring.source, "taste");
+  assert.deepEqual(by("in").tailoring.ranked, ["Penguin", "Aspirin"]);
+  assert.deepEqual(by("in").options.map((o) => o.name), ["Penguin", "Aspirin", "Aladdin", "Tintin"]);
+  assert.ok(by("in").options[0].taste > by("in").options[1].taste);
+  assert.equal(by("in").options[2].taste, undefined);
+  // chole: the learner's own pick (Pepsi) leads its card without a call; the other three colas are ranked by one call.
+  assert.deepEqual(by("chole").options.map((o) => o.name), ["Pepsi-Cola", "RC Cola", "Inca Kola", "Coca-Cola"]);
+  assert.equal(by("chole").options[0].taste, 1);
+  // cysto: Twisted Sister is the learner's own pick, so it leads; the two films are ranked by one call; the one other band is not worth a call.
+  assert.deepEqual(by("cysto").tailoring.types, ["movie"]);
+  assert.deepEqual(by("cysto").options.map((o) => o.name), ["Twisted Sister", "Sisters (2015)", "Sister Act", "Sister Sledge"]);
+  // kin: both options are the same entity (Kinetic Sand said two ways), nothing to rank, no credit spent.
+  assert.equal(by("kin").tailoring.source, "editorial"); assert.equal(by("kin").tailoring.reason, "one entity");
+  assert.ok(by("in").options.every((o) => o.wiki && o.connection), "every option still has a picture and a connection line");
+  const calls = (await s("GET", "/api/diagnostics")).body.calls;
+  // 4 ranks (-in, chole, cysto x2) and a describe per pick whose ID the server did not already know (the entity map is shared by every learner).
+  const n = calls.find((c) => c.provider === "qloo-mock").n;
+  assert.ok(n >= 4 && n <= 6, `calls: ${n}`);
+  assert.ok((await s("GET", "/api/health")).body.taste.entities >= 8, "IDs learned from the rank answers (2 describes, 7 ranked names)");
+
+  // A pick from a ranked card is a hook from taste; the progress card says so.
+  cues = await pick("in", "Penguin");
+  const inCue = cues.find((c) => c.role === "in");
+  assert.equal(inCue.hook_source, "taste"); assert.equal(inCue.shown_rank, 0);
+  assert.equal(inCue.qloo_entity_id, "mock-penguin-books", "resolved from the rank answer, no describe needed");
+  const hooks = (await s("GET", "/api/progress/cholecystokinin")).body.hooks;
+  assert.equal(hooks.line, "1 of your 3 hooks came from your taste.");
+  assert.deepEqual(hooks.term, { total: 3, taste: 1, editorial: 2, own: 0 });
+  assert.equal(hooks.signals, 3);
+  // An off-list favorite is the learner's own.
+  const own = (await s("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: "kin", label: "Ky Jelly", connection: "my own", source: "pick", recognized: true })).body;
+  assert.equal(own.find((c) => c.role === "kin").hook_source, "own");
+  assert.equal((await s("GET", "/api/progress/cholecystokinin")).body.hooks.term.own, 1);
+  // Export carries what the stickiness link needs later: the cue's source and rank, and the cards as offered.
+  const exp = (await s("GET", "/api/export")).body;
+  assert.ok(exp.learner_cues.every((c) => "hook_source" in c && "shown_rank" in c));
+  assert.equal(exp.pick_offers.length, 4);
+});
+
 test("13 + 24: hints block independence; retried submissions settle once", async () => {
   const s = session();
   await s("POST", "/api/terms/brier-score/first-attempt", { skipped: true });
