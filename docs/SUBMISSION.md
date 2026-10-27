@@ -10,7 +10,7 @@ Required: live demo URL · public repo URL · text description · external hosti
 
 ## Description (draft)
 
-**Gloo × Qloo: learn hard terms through things you already know.**
+**Gloo × Qloo: make hard words stick using the culture you love.**
 
 Gloo teaches complex terms by first using the meaning already inside them
 (*chole* = bile, *cyst* = sac, *kin* = movement), then attaching each part to a

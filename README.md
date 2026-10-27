@@ -1,6 +1,6 @@
 # Gloo × Qloo
 
-**An agent that teaches hard terms through things you already know.**
+**Make hard words stick using the culture you love.** Point your camera, say “Gloo it,” and an unfamiliar word becomes an unforgettable connection.
 Built for the Qloo Agentic Hackathon as an open extension of [Gloo](https://gloo.news).
 
 > Patent pending. See [PATENTS.md](PATENTS.md).
