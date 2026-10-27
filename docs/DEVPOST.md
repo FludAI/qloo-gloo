@@ -12,13 +12,7 @@ Gloo
 ## Elevator pitch (200)
 
 ```
-Point your camera at a hard word, say "gloo it", and hear it in pieces, each hooked to something you already love. Qloo's taste graph picks the hooks; the word sticks.
-```
-
-Alternative, shorter:
-
-```
-Hard words, glued to your taste. Frame a word, say "gloo it", pick your cola. Qloo chooses the hooks that stick to you.
+Make hard words stick using the culture you love. Point your camera, say “Gloo it,” and turn unfamiliar words into unforgettable connections.
 ```
 
 ## Built with (tags)
