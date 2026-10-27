@@ -4,7 +4,7 @@ export const cck = {
   version: "1.0.0",
   review: { status: "reviewed", reviewed_at: "2026-10-18" },
   title: "Cholecystokinin (CCK)",
-  pronunciation: { approx: "koh-lih-sis-tuh-KY-nin", ipa: "ˌkoʊlɪˌsɪstoʊˈkaɪnɪn", ipa_syllables: ["koʊ", "lɪ", "sɪs", "toʊ", "ˈkaɪ", "nɪn"], note: "Approximate learner guidance. Cola, sister, kin and LinkedIn are memory cues, not a transcription." },
+  pronunciation: { approx: "koh-lih-sis-tuh-KY-nin", ipa: "ˌkoʊlɪˌsɪstoʊˈkaɪnɪn", ipa_syllables: ["koʊ", "lɪ", "sɪs", "toʊ", "ˈkaɪ", "nɪn"], note: "Approximate learner guidance. Cola, sister, KY-netic Sand and aspirin are memory cues, not a transcription. Kin is said KY here, as the IPA shows." },
   summary:
     "The word already contains its meaning: chole (bile) + cyst (sac) + kin (movement) — the hormone that makes the bile sac move.",
   definition:
@@ -53,12 +53,10 @@ export const cck = {
         { name: "Sister Sledge", wiki: "Sister Sledge", say: ["sledge"], qloo: { entity: "Sister Sledge", type: "artist" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
         { name: "Sisters (2015)", wiki: "Sisters (2015 film)", say: ["sisters", "the movie", "tina fey", "amy poehler"], qloo: { entity: "Sisters", type: "movie" }, connection: "Sister ≈ cyst / cysto (approximate sound). Cysto means bladder or sac." },
       ] } },
-    { id: "kin", label: "kin = movement", part: "kin", say: "kin", ipa: "kɪn", ipa_syllables: ["kɪn"], meaning: "movement", sound_like: null, target: "movement", look_for: "something you picture moving",
-      pick: { question: "Say the one you picture moving.", options: [
-        { name: "Formula 1", wiki: "Formula One", say: ["formula one", "f1", "formula"], qloo: { entity: "Formula 1", type: "brand" }, connection: "Formula 1 is movement. Kin / kine means movement." },
-        { name: "Fast & Furious", wiki: "Fast & Furious 6", say: ["fast and furious", "fast", "furious"], qloo: { entity: "Fast & Furious", type: "movie" }, connection: "Fast & Furious is movement. Kin / kine means movement." },
-        { name: "Tour de France", wiki: "Tour de France", say: ["tour", "le tour"], qloo: { entity: "Tour de France", type: "brand" }, connection: "The Tour de France is movement. Kin / kine means movement." },
-        { name: "Tesla", wiki: "Tesla, Inc.", say: ["tesla"], qloo: { entity: "Tesla", type: "brand" }, connection: "A Tesla is movement. Kin / kine means movement." },
+    { id: "kin", label: "kin = movement (said KY)", part: "kin", say: "ky", ipa: "kaɪ", ipa_syllables: ["kaɪ"], meaning: "movement", sound_like: "KY-netic Sand", target: "the sound “ky” / kin", look_for: "something kinetic, said with a long i",
+      pick: { question: "Here, kin is said like the start of KY-netic Sand. Which do you say?", options: [
+        { name: "KY-netic Sand", wiki: "Kinetic Sand", ipa: "ˌkaɪˈnɛtɪk sænd", say: ["ky-netic", "ky netic", "kai netic", "kynetic", "ky", "long i", "the first", "first one", "left"], qloo: { entity: "Kinetic Sand", type: "brand" }, connection: "KY-netic Sand: you already say kin as KY. Kin means movement, and the sand moves." },
+        { name: "kih-NET-ic Sand", wiki: "Kinetic Sand", ipa: "kɪˈnɛtɪk sænd", say: ["kinetic sand", "kinetic", "kih-netic", "kih netic", "short i", "the second", "second one", "right"], qloo: { entity: "Kinetic Sand", type: "brand" }, connection: "Kinetic Sand moves. In cholecystokinin, kin is said KY, like Kentucky's K-Y. Kin means movement." },
       ] } },
     { id: "in", label: "-in ending", part: "-in", say: "in", ipa: "ɪn", ipa_syllables: ["ɪn"], meaning: "the substance ending", sound_like: "-in", target: "the ending sound “-in”", look_for: "something ending in “-in”",
       pick: { question: "Say the one that ends in “-in”.", options: [
@@ -102,7 +100,7 @@ export const cck = {
       misconceptions: [[/cyto/, "Cyto means cell. The bladder/sac root is cyst or cysto."], [/sister/, "Sister is the sound cue, not the word part."]],
       answer: "Cyst or cysto." },
     { id: "cck-kin", skill: "meaning", type: "text", question: "In cholecystokinin, what does kin mean?",
-      hint: "Kinetic.", rubric: { any: [/mov|motion|moti/] },
+      hint: "KY-netic Sand.", rubric: { any: [/mov|motion|moti/] },
       misconceptions: [[/famil|relative/, "Family is the memory link. The biological root means movement."]], answer: "Movement." },
     { id: "cck-function", skill: "meaning", type: "text", question: "What does CCK do?",
       hint: "Bile sac + movement.", rubric: { all: [/gall ?bladder|bile sac|bile/, /contract|squeez|mov|empt/] },

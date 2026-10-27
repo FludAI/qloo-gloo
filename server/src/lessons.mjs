@@ -128,6 +128,7 @@ export function validatePacket(p) {
           if (!optStr(o.wiki, 120)) bad(`${oat}.wiki: a Wikipedia title or null`);
           if (o.say != null && !strList(o.say, 60)) bad(`${oat}.say: a list of spoken forms`);
           if (!optStr(o.connection, 240)) bad(`${oat}.connection: a string`);
+          if (!optStr(o.ipa, 80)) bad(`${oat}.ipa: IPA for the voice to say the name, or null`);
           if (o.qloo != null && !(typeof o.qloo === "object" && isStr(o.qloo.entity, 80) && optStr(o.qloo.type, 40))) bad(`${oat}.qloo: { entity, type } or null`);
         });
       }
@@ -180,7 +181,7 @@ const TOP_SCALARS = ["title", "summary", "definition", "scene", "origin", "formu
 const TOP_LISTS = ["aliases", "components", "family", "distinctions", "transfer", "sources", "rules", "examples", "editorial_cues"];
 const TOP_OBJECTS = ["pronunciation", "first_attempt", "graph"];
 const ROLE_FIELDS = ["label", "part", "say", "ipa", "ipa_syllables", "sound_like", "meaning", "target", "look_for"];
-const OPTION_FIELDS = ["name", "wiki", "say", "connection", "qloo"];
+const OPTION_FIELDS = ["name", "wiki", "say", "connection", "qloo", "ipa"];
 const PROMPT_FIELDS = ["skill", "type", "question", "hint", "answer", "accept_all", "accept_any", "expected", "options", "misconceptions", "bonus"];
 const META = new Set(["id", "version", "review_status", "reviewed_at", "edited_by", "edited_at", "history", "provisional", "promoted_from", "pending"]);
 
@@ -239,9 +240,11 @@ export function applyPatch(doc, patch) {
           let j = Number.isInteger(op.index) ? op.index : opts.findIndex((o) => o.name === op.name);
           if (j === opts.length && Number.isInteger(op.index)) { opts.push({ name: "", wiki: null, say: [], qloo: null, connection: "" }); }
           if (j < 0 || j >= opts.length) return problems.push(`${oat}: no option ${op.index ?? op.name}`);
-          const { index: _i, ...of } = op;
+          const { index: _i, remove, ...of } = op;
+          if (remove === true) { opts[j] = null; return; } // { index, remove: true } drops the option
           mergeFields(opts[j], of, OPTION_FIELDS, oat, problems);
         });
+        list[i].pick.options = opts.filter(Boolean);
       });
       continue;
     }
@@ -315,7 +318,7 @@ export function pathToPatch(path, value) {
       const o = /^\d+$/.test(rest[2]) ? { index: Number(rest[2]) } : { name: rest[2] };
       return { roles: [{ ...keyed(key), pick: { options: [{ ...o, [rest[3]]: value }] } }] };
     }
-    err("needs roles[<id>].pick.question or roles[<id>].pick.options[<n>].<name|wiki|say|connection|qloo>");
+    err("needs roles[<id>].pick.question or roles[<id>].pick.options[<n>].<name|wiki|say|connection|qloo|ipa>");
   }
   err("not an editable field");
 }

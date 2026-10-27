@@ -14,15 +14,18 @@ import { createStore } from "../src/media.mjs";
 import { cck } from "../src/content/cck.mjs";
 
 const lesson = fromCode(cck);
+// The same lesson with kin's hook removed: a role with no sound-alike.
+const bare = fromCode(cck); bare.roles.find((r) => r.id === "kin").sound_like = null;
 
 test("grid: every field key reads the lesson, round-trips to a proposal path, and names the suggest field", () => {
   const keys = buildLayout(lesson).map((n) => n.key);
   assert.equal(keys.length, 3 + 4 * 8 + 6 * 3);
   assert.equal(getValue(lesson, "w:say"), "koh-lih-sis-tuh-KY-nin");
   assert.equal(getValue(lesson, "r:cysto:sounds"), "sister");
-  assert.equal(getValue(lesson, "r:kin:sounds"), "", "a null sound_like reads as empty");
+  assert.equal(getValue(lesson, "r:kin:sounds"), "KY-netic Sand");
+  assert.equal(getValue(bare, "r:kin:sounds"), "", "a null sound_like reads as empty");
   assert.equal(getValue(lesson, "r:chole:opt3"), "Inca Kola");
-  assert.equal(getValue(lesson, "p:cck-kin:hint"), "Kinetic.");
+  assert.equal(getValue(lesson, "p:cck-kin:hint"), "KY-netic Sand.");
   for (const k of keys) {
     const path = proposalPath(k);
     assert.equal(keyForPath(lesson, path), k, `${k} -> ${path} -> back`);
@@ -67,7 +70,7 @@ test("grid: the queue puts pending fixes first, then improvements, then local fl
     { path: "roles[chole].pick.options[3].name", before: "Inca Kola", after: null, reason: "sound", severity: "fix" },
     { path: "pronunciation.ipa", before: "x", after: "y", reason: "ipa", severity: "fix" },
   ];
-  const { queue, unmapped } = buildQueue(lesson, pending);
+  const { queue, unmapped } = buildQueue(bare, pending);
   assert.deepEqual(queue.slice(0, 3), ["r:chole:opt3", "p:cck-cysto:answer", "w:summary"]);
   assert.ok(queue.includes("r:kin:sounds"), "the empty sounds-like is a local flag");
   assert.ok(queue.indexOf("r:kin:sounds") > queue.indexOf("w:summary"));

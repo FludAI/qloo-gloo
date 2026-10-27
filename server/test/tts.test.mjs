@@ -31,7 +31,7 @@ test("ssml: every piece and the whole word are spoken syllable by syllable from 
 
 test("ssml: a piece spoken on its own is pinned, even a short ending like -in; one syllable is one phoneme", () => {
   assert.equal(buildSsml("-in", cck), `<speak>${syl(0, ["ɪn", "in"])}</speak>`);
-  assert.equal(buildSsml("kin", cck), `<speak>${syl(0, ["kɪn", "kin"])}</speak>`);
+  assert.equal(buildSsml("kin", cck), `<speak>${syl(0, ["kaɪ", "kin"])}</speak>`);
   assert.equal(buildSsml("Brier", brier), `<speak>${syl(0, ["ˈbraɪ", "Bri"], ["ər", "er"])}</speak>`);
   assert.deepEqual(phonemes(buildSsml("Brier score", brier)), ["ˈbraɪ", "ər", "skɔːr"]);
 });
@@ -45,9 +45,17 @@ test("ssml: a term with IPA but no stored syllables is split by the fallback; ma
 
 test("marks: time points from the service are matched by name; a missing one voids the set", () => {
   const { marks } = buildSpeech("kin", cck);
-  assert.deepEqual(timeMarks(marks, [{ markName: "m0", timeSeconds: 0.0421 }]), [{ index: 0, piece: "kin", syllable: "kɪn", time: 0.042 }]);
+  assert.deepEqual(timeMarks(marks, [{ markName: "m0", timeSeconds: 0.0421 }]), [{ index: 0, piece: "kin", syllable: "kaɪ", time: 0.042 }]);
   assert.equal(timeMarks(marks, []), null);
   assert.deepEqual(timeMarks([], []), []);
+});
+
+test("ssml: a pick option with IPA is said from it, in a line and on its own; kin is said ky", () => {
+  const { ssml } = buildSpeech("KY-netic Sand. kin.", cck);
+  assert.match(ssml, /<phoneme alphabet="ipa" ph="ˌkaɪˈnɛtɪk sænd">KY-netic Sand<\/phoneme>/);
+  assert.match(ssml, /<phoneme alphabet="ipa" ph="kaɪ">kin<\/phoneme>/);
+  assert.match(buildSpeech("Here, kin is said like the start of KY-netic Sand. Which do you say?", cck).ssml, /ph="ˌkaɪˈnɛtɪk sænd"/);
+  assert.doesNotMatch(buildSpeech("kinetic", cck).ssml, /<phoneme/);
 });
 
 test("ssml: plain text, or a term without IPA, passes through untouched", () => {
@@ -121,7 +129,7 @@ test("clips: a clip from before syllable timing is rebuilt once for a line with 
   const first = await sp.say("kin", cck);
   assert.equal(first.cached, false);
   assert.ok(first.bytes.toString().startsWith("new|"));
-  assert.deepEqual(first.marks, [{ index: 0, piece: "kin", syllable: "kɪn", time: 0 }]);
+  assert.deepEqual(first.marks, [{ index: 0, piece: "kin", syllable: "kaɪ", time: 0 }]);
   assert.equal((await sp.say("kin", cck)).cached, true);
   assert.equal(calls, 1);
   // The same old clip, verified by the owner: served as it is, marks null, nothing paid for.

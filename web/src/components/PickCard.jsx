@@ -49,7 +49,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
     setPicking(null);
     setReveal({ label, option, custom: !option, fresh: true });
     // When the piece is already spoken as its hook (chole is said "cola"), "like cola" would repeat it.
-    const hooked = role.sound_like && role.say && role.say.toLowerCase() === String(role.sound_like).toLowerCase();
+    const hooked = role.sound_like && ((role.say && role.say.toLowerCase() === String(role.sound_like).toLowerCase()) || squash(label) === squash(role.sound_like));
     const first = role.sound_like && !hooked ? `${label}. ${role.part}, like ${role.sound_like}.` : `${label}. ${role.part}.`;
     setTimeout(() => speak(first, { term }), 700);
     setTimeout(() => speak(`${role.part} means ${role.meaning}.`, { term }), 2400);

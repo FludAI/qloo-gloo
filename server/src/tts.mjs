@@ -65,6 +65,8 @@ export function pronunciations(term) {
     // Only the role's own spellings ("chole / chol"): IPA is exact, so "cyst" never borrows cysto's sound.
     for (const a of String(r.part).split("/").map(clean).filter(Boolean)) add(a, r.ipa, syllablesOf(r));
   }
+  // A pick option with IPA is said from it: "KY-netic Sand" read as letters would teach nothing.
+  for (const r of term?.roles ?? []) for (const o of r?.pick?.options ?? []) if (o?.name && o?.ipa) add(o.name, o.ipa, []);
   return out.sort((a, b) => b.spelling.length - a.spelling.length);
 }
 

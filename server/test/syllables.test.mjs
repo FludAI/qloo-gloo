@@ -43,7 +43,7 @@ test("validation: the syllable count must match a hyphenated respelling; a hook 
   doc.pronunciation.ipa_syllables = ["koʊ", "lɪ", "sɪs", "toʊ", "ˈkaɪnɪn"];
   doc.roles[1].ipa_syllables = ["ˈsɪstoʊ"]; // "sis-toh" says two
   doc.roles[0].ipa_syllables = ["ˈkoʊ", "lə"]; // "cola" is the hook, two syllables are fine
-  doc.roles[2].ipa_syllables = ["kɪ", "n"];
+  doc.roles[2].ipa_syllables = ["ka", "ɪ"]; // "ky" is the hook, two syllables are fine
   doc.roles[3].ipa_syllables = "ɪn";
   const problems = validatePacket(doc);
   assert.ok(problems.includes('pronunciation: 5 IPA syllables but the respelling "koh-lih-sis-tuh-KY-nin" has 6'), problems.join("\n"));
@@ -66,7 +66,7 @@ test("validation: the syllable count must match a hyphenated respelling; a hook 
 test("packets: every word and piece with IPA reaches the learner with its syllables", () => {
   const t = hydrate(fromCode({ ...cck, pronunciation: { ...cck.pronunciation, ipa_syllables: undefined }, roles: cck.roles.map(({ ipa_syllables, ...r }) => r) }));
   assert.deepEqual(t.pronunciation.ipa_syllables, ["ˌkoʊ", "lɪ", "ˌsɪs", "toʊ", "ˈkaɪ", "nɪn"]);
-  assert.deepEqual(t.roles.map((r) => r.ipa_syllables), [["ˈkoʊ", "lə"], ["ˈsɪs", "toʊ"], ["kɪn"], ["ɪn"]]);
+  assert.deepEqual(t.roles.map((r) => r.ipa_syllables), [["ˈkoʊ", "lə"], ["ˈsɪs", "toʊ"], ["kaɪ"], ["ɪn"]]);
   const b = hydrate(fromCode(brier));
   assert.equal(b.roles[1].ipa_syllables, undefined, "no IPA, no syllables");
 });

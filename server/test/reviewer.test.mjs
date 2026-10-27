@@ -20,6 +20,7 @@ function broken() {
   doc.roles[0].pick.options[3] = { name: "Sprite", wiki: "Sprite (drink)", say: ["sprite"], qloo: null, connection: "Sprite is a soda." };
   doc.roles[1].say = "koh-lee"; // cysto said as chole
   doc.prompts[0].answer = "Gall."; // rubric wants \bbile\b
+  doc.roles[2].sound_like = null; // kin as a meaning role again
   doc.roles[2].pick.options[1] = { ...doc.roles[2].pick.options[1], wiki: null, connection: "A film." }; // meaning role, no picture, no link to movement
   return doc;
 }

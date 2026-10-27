@@ -65,6 +65,16 @@ test("the bucket wins over the SQLite cache, and the cache fills in when the buc
   assert.equal(c.get("brier-score").version, 2);
 });
 
+test("merge patch removes a pick option with { index, remove: true } and sets an option's ipa", () => {
+  const before = fromCode(cck).roles.find((r) => r.id === "kin").pick.options.length;
+  const { packet, problems } = applyPatch(fromCode(cck), { roles: [{ id: "kin", pick: { options: [{ index: 0, ipa: "ˌkaɪˈnɛtɪk sænd" }, { index: 1, remove: true }] } }] });
+  assert.deepEqual(problems, []);
+  const kin = packet.roles.find((r) => r.id === "kin");
+  assert.equal(kin.pick.options.length, before - 1);
+  assert.equal(kin.pick.options[0].ipa, "ˌkaɪˈnɛtɪk sænd");
+  assert.deepEqual(validatePacket(packet), []);
+});
+
 test("merge patch addresses roles, prompts and pick options by id or index; unknown fields are refused", () => {
   const doc = fromCode(cck);
   const { packet, changed, problems } = applyPatch(doc, {
