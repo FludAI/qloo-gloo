@@ -76,3 +76,7 @@ git log --all --format='%an <%ae>' | sort | uniq -c
 git log --all --format='%H%n%B' | grep -nE 'sk-ant-|AIza|[0-9a-f]{32,}'
 git status --ignored --short
 ```
+
+## Second opinion: gitleaks
+
+Run by the owner on 2026-10-27 from Git Bash: `gitleaks git --redact -v C:/Users/loren/GLOO`. Result: 53 commits scanned, about 6.25 MB in 2.49 s, **no leaks found**. (gitleaks walks the current branch's history, `camera-first`; the grep audit above also covered the local-only branches and dangling objects.)
