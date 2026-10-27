@@ -7,7 +7,7 @@ import AmbientGate from "./components/AmbientGate.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
-import { CameraIcon, CloseIcon, InfoIcon, LockIcon, MicIcon, PictureIcon } from "./components/Icons.jsx";
+import { CameraIcon, CloseIcon, InfoIcon, MicIcon, PictureIcon } from "./components/Icons.jsx";
 import { imageFrom, isPhone } from "./lib/device.js";
 
 // Gloo is a camera. Camera and mic on (phone or glasses), or a shared window on a desktop, or a picture of
@@ -88,7 +88,6 @@ export default function App() {
   }, []);
   const pickFile = (e) => { const f = e.target.files?.[0]; e.target.value = ""; showPicture(f); };
   const live = camState === "live";
-  const locked = health?.gated && !health?.unlocked;
 
   return (
     <div className="relative h-full w-full select-none overflow-hidden bg-black text-paper">
@@ -96,7 +95,6 @@ export default function App() {
         <div className="safe-top absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4">
           <img src="/brand/gloo-logo-on-dark.svg" alt="Gloo" className="h-8 w-auto" draggable="false" />
           <div className="flex items-center gap-2">
-            {locked && <button className="round !h-9 !w-9" aria-label="Enter passcode" onClick={() => setPass({ retry: null })}><LockIcon /></button>}
             <button className="round !h-9 !w-9" aria-label="About this demo" onClick={() => setInfo(true)}><InfoIcon /></button>
           </div>
         </div>
@@ -133,7 +131,7 @@ export default function App() {
 
       {sheet && <Flow termId={sheet.termId} glued={sheet.glued} health={health} guard={guard}
         onClose={() => { setSheet(null); loadTerms(); }} onRegue={(body) => glue(body, "Gluing…")} />}
-      {info && <InfoSheet health={health} micGranted={micGranted} onClose={() => setInfo(false)} onPasscode={() => { setInfo(false); setPass({ retry: null }); }} />}
+      {info && <InfoSheet health={health} micGranted={micGranted} onClose={() => setInfo(false)} />}
       {pass && <Passcode onClose={() => setPass(null)} onUnlocked={async () => { const retry = pass.retry; setPass(null); await loadHealth(); if (retry) guard(retry); }} />}
     </div>
   );
@@ -157,7 +155,7 @@ function VerifyClip() {
   );
 }
 
-function InfoSheet({ health, micGranted, onClose, onPasscode }) {
+function InfoSheet({ health, micGranted, onClose }) {
   const [msg, setMsg] = useState("");
   const download = async () => {
     const blob = new Blob([JSON.stringify(await api.exportData(), null, 2)], { type: "application/json" });
@@ -180,10 +178,8 @@ function InfoSheet({ health, micGranted, onClose, onPasscode }) {
             {row("Microphone", micGranted, micGranted ? "allowed" : "ask when held")}
             {row("Cue agent", health.agent.mode === "live", health.agent.mode === "live" ? health.agent.model : health.agent.mode)}
             {row("Qloo", health.qloo.ready, health.qloo.mode === "mock" ? "mock data" : health.qloo.ready ? "live" : "key missing")}
-            {health.gated && row("Passcode", health.unlocked, health.unlocked ? "unlocked" : "locked")}
           </ul>
         )}
-        {health?.gated && !health?.unlocked && <button className="btn-light mt-3" onClick={onPasscode}>Enter passcode</button>}
         {health?.tts === "google" && health?.unlocked && <VerifyClip />}
         <p className="mt-4 text-xs text-paper/50">Only the framed crop and a few seconds of audio go to the server; nothing is stored. Motion studies: <a className="underline" href="/motion/studies.html">/motion/studies.html</a>.</p>
         <p className="mt-3 flex gap-3 text-xs text-paper/60">

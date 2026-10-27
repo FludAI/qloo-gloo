@@ -33,7 +33,7 @@ done
 ```bash
 gcloud run deploy qloo-gloo --source . --region $REGION \
   --allow-unauthenticated \
-  --set-secrets QLOO_API_KEY=qloo-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,DEMO_PASSCODE=gloo-demo-passcode:latest,ADMIN_TOKEN=gloo-admin-token:latest \
+  --set-secrets QLOO_API_KEY=qloo-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,ADMIN_TOKEN=gloo-admin-token:latest \
   --min-instances 1 --max-instances 1 --session-affinity \
   --memory 1Gi --cpu 1 --timeout 120
 ```
@@ -142,7 +142,7 @@ Environment variables (defaults shown):
 | `TTS_DISABLE` | unset | `1` = never use the server voice |
 | `MEDIA_BUCKET` | `gloo-media-bondswipe` | Cloud Storage bucket for clips and pictures |
 | `MEDIA_LOCAL` / `MEDIA_DIR` | unset | `1` forces the local folder (tests); `MEDIA_DIR` moves it |
-| `DEMO_PASSCODE` | unset | When set, camera, voice, the agent and drafting need it once per session |
+| `DEMO_PASSCODE` | unset | When set, camera, voice, the agent and drafting need it once per session. Off since Oct 27, 2026 (the daily caps are the traffic protection); to turn the gate back on, add `DEMO_PASSCODE=gloo-demo-passcode:latest` to `--set-secrets` and redeploy; the share link `?code=…` and the passcode sheet still work |
 | `ADMIN_TOKEN` | unset | Owner token for `/api/admin/lessons` and `/edit` (header `x-gloo-admin`); unset = owner API off |
 
 Set a budget alert on the Anthropic account too. Qloo hackathon keys expire

@@ -1,7 +1,6 @@
 # Devpost form, field by field
 
-Copy each block into the matching field. The passcode is never written here: add it to the
-"Try it out" link yourself as `?code=…` right before submitting.
+Copy each block into the matching field. The demo is ungated (no passcode) since Oct 27.
 
 ## Project name (60)
 
@@ -24,7 +23,7 @@ javascript, node.js, react, vite, tailwind, express, sqlite, qloo, qloo-api, mcp
 ## "Try it out" links
 
 ```
-https://gloo.news/?code=<passcode>
+https://gloo.news
 https://github.com/FludAI/qloo-gloo
 ```
 
