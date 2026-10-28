@@ -44,7 +44,12 @@ export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListenin
         if (!transcript.trim()) return setError("Didn't catch that. Try again.");
         await onText?.({ transcript });
       }
-    } catch (e) { setError(e.message); onError?.(e); }
+    } catch (e) {
+      // The browser-speech fallback reports a refusal here, at release: the same device fix applies.
+      const blocked = e?.code === "not-allowed" || e?.name === "NotAllowedError";
+      if (blocked) setMicState("blocked");
+      setError(blocked ? micFix() : e.message); onError?.(e);
+    }
   }, [onPcm, onText, onError, onListening]);
 
   const start = useCallback(async (e) => {
