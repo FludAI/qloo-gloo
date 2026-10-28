@@ -9,7 +9,7 @@ import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
 import { CameraIcon, CloseIcon, InfoIcon, MicIcon, PictureIcon } from "./components/Icons.jsx";
-import { imageFrom, isPhone } from "./lib/device.js";
+import { imageFrom, inAppBrowser, isIOS, isPhone } from "./lib/device.js";
 
 // Gloo is a camera. Camera and mic on (phone or glasses), or a shared window on a desktop, or a picture of
 // the word; you don't proceed without one of them. No typing anywhere.
@@ -79,7 +79,12 @@ export default function App() {
 
   const openCamera = (which = "camera") => { warmAudio(); unlockAudio(); cam.current?.start(which); };
   const showPicture = (file) => { if (!file) return; warmAudio(); unlockAudio(); cam.current?.show(file); };
-  const onCamState = (s, extra) => { setCamState(s); setSource(extra?.source ?? null); setAccess({ slow: Boolean(extra?.slow), error: extra?.error ?? null, reason: extra?.reason ?? null }); if (s === "live") setMicGranted((m) => m || Boolean(extra?.mic)); };
+  const onCamState = (s, extra) => {
+    setCamState(s); setSource(extra?.source ?? null); setAccess({ slow: Boolean(extra?.slow), error: extra?.error ?? null, reason: extra?.reason ?? null });
+    if (s === "live") setMicGranted((m) => m || Boolean(extra?.mic));
+    // What the gate saw, for the testers report: no names, no addresses, just the outcome and the kind of browser.
+    if (s === "live" || s === "denied" || s === "unavailable" || extra?.slow) api.beacon({ event: "gate", state: s, source: extra?.source ?? null, error: extra?.error ?? null, reason: extra?.reason ?? null, slow: Boolean(extra?.slow), in_app: inAppBrowser(), platform: isIOS() ? "ios" : isPhone() ? "android" : "desktop" });
+  };
   // A screenshot pasted or an image dropped anywhere on the page is the word.
   useEffect(() => {
     const onPaste = (e) => { const f = imageFrom(e.clipboardData); if (f) { e.preventDefault(); showPicture(f); } };

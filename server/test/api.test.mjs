@@ -396,6 +396,30 @@ test("say: the server speaks the pieces from IPA, once; hits are free of the lim
   assert.equal((await raw("/api/say", { text: "x", term_id: "no-such-term" }, cookie)).status, 404);
 });
 
+// ---- Gate beacons and the testers report ----
+test("a gate beacon is stored per session, and the owner's report shows where each session stopped", async () => {
+  const s = session();
+  assert.equal((await s("POST", "/api/beacon", { event: "gate", state: "denied", source: "camera", error: "NotAllowedError", in_app: "LinkedIn", platform: "ios" })).body.ok, true);
+  assert.equal((await s("POST", "/api/beacon", { event: "bad event!" })).status, 400);
+  const t = session();
+  await t("POST", "/api/beacon", { event: "gate", state: "live", source: "screen", platform: "desktop" });
+  await t("POST", "/api/terms/cholecystokinin/first-attempt", { skipped: true });
+  await t("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: "chole", label: "Pepsi-Cola", connection: "Pepsi ≈ chole.", source: "pick", recognized: true });
+  const open = await fetch(`http://localhost:${PORT}/api/admin/testers`);
+  assert.equal(open.status, 401, "the report is the owner's");
+  const r = await (await fetch(`http://localhost:${PORT}/api/admin/testers?hours=1`, { headers: { "x-gloo-admin": "test-owner-token" } })).json();
+  assert.ok(r.sessions >= 2);
+  const denied = r.rows.find((x) => x.gate?.error === "NotAllowedError");
+  assert.equal(denied.stage, "visited"); assert.equal(denied.gate.in_app, "LinkedIn"); assert.equal(denied.gate.platform, "ios");
+  const picked = r.rows.find((x) => x.gate?.source === "screen" && x.picks === 1);
+  assert.equal(picked.stage, "pick"); assert.deepEqual(picked.lessons, ["cholecystokinin"]);
+  assert.ok(r.funnel.visited >= r.funnel.gate && r.funnel.gate >= r.funnel.pick && r.funnel.pick >= 1);
+  const text = await (await fetch(`http://localhost:${PORT}/api/admin/testers?hours=1&format=text`, { headers: { "x-gloo-admin": "test-owner-token" } })).text();
+  assert.match(text, /funnel: visited \d+ > gate \d+ > read \d+ > lesson \d+ > pick \d+/);
+  assert.match(text, /NotAllowedError/);
+  await s("DELETE", "/api/learner"); await t("DELETE", "/api/learner");
+});
+
 // ---- Owner API: the lesson store behind ADMIN_TOKEN ----
 const owner = (token = "test-owner-token") => async (method, path, body, extra = {}) => {
   const res = await fetch(`http://localhost:${PORT}${path}`, {

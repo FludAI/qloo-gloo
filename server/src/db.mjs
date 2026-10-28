@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS resolutions (
 CREATE TABLE IF NOT EXISTS pick_offers (
   sid TEXT NOT NULL, term_id TEXT NOT NULL, role TEXT NOT NULL, tailored INTEGER NOT NULL, options TEXT NOT NULL, signals TEXT NOT NULL, at INTEGER NOT NULL,
   PRIMARY KEY (sid, term_id, role));
+CREATE TABLE IF NOT EXISTS beacons (id INTEGER PRIMARY KEY, sid TEXT NOT NULL, event TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS provider_calls (
   id INTEGER PRIMARY KEY, sid TEXT, provider TEXT NOT NULL, op TEXT NOT NULL, status TEXT NOT NULL, cache TEXT, duration_ms REAL, created_at INTEGER NOT NULL);
 `);
@@ -56,6 +57,7 @@ if (!db.prepare("PRAGMA table_info(first_attempts)").all().some((c) => c.name ==
 }
 
 export const q = {
+  addBeacon: db.prepare("INSERT INTO beacons (sid, event, data, created_at) VALUES (?, ?, ?, ?)"),
   ensureLearner: db.prepare("INSERT OR IGNORE INTO learners (sid, created_at) VALUES (?, ?)"),
   isUnlocked: db.prepare("SELECT unlocked FROM learners WHERE sid = ?"),
   unlock: db.prepare("UPDATE learners SET unlocked = 1 WHERE sid = ?"),

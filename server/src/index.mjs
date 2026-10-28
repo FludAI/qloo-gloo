@@ -10,6 +10,7 @@ import { toItems } from "./normalize.mjs";
 import { mockQloo } from "./mock.mjs";
 import { take } from "./limits.mjs";
 import { db, q, exportLearner, deleteLearner } from "./db.mjs";
+import { testersReport, testersText } from "./testers.mjs";
 import { assess, promptHints, bestHeard } from "./assess.mjs";
 import { deriveSkill, POLICY } from "./scheduler.mjs";
 import { listTerms, getTerm, findPrompt, publicTerm, publicPrompt, addTerms, reload as reloadContent, store as lessons } from "./content/index.mjs";
@@ -26,6 +27,7 @@ import { media } from "./media.mjs";
 import { scorePieces, termPieces } from "./resolve/pieces.mjs";
 import { DOMAIN_TERMS } from "./resolve/domain-terms.mjs";
 import { loadEntities, knownEntities, resolveEntity, tailorTerm, hookSourceFor, hooksSummary, signalsFor, MIN_PICKS, RESERVE as TASTE_RESERVE } from "./taste.mjs";
+import * as credits from "./credits.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
@@ -87,10 +89,14 @@ app.use((req, res, next) => {
     sid = randomBytes(16).toString("hex");
     res.setHeader("Set-Cookie", `gloo_sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
   }
-  q.ensureLearner.run(sid, Date.now());
+  // First contact: the welcome Gloo (once per session for ever; the ledger survives "delete my data").
+  if (q.ensureLearner.run(sid, Date.now()).changes === 1) credits.welcome(sid);
   req.sid = sid;
   next();
 });
+// Behind Cloud Run's proxy the client address is the first forwarded hop. Only ever hashed with a secret, for the referral soft signal.
+const clientIp = (req) => String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket?.remoteAddress || null;
+const originOf = (req) => process.env.PUBLIC_URL?.replace(/\/$/, "") || `${req.headers["x-forwarded-proto"] ?? req.protocol ?? "http"}://${req.headers.host}`;
 
 const unlocked = (sid) => !PASSCODE || Boolean(q.isUnlocked.get(sid)?.unlocked);
 const locked = (res) => res.status(401).json({ error: "This demo needs a passcode for camera, voice and the agent.", code: "PASSCODE_REQUIRED" });
@@ -139,8 +145,22 @@ app.get("/api/health", wrap(async (req, res) => {
   res.json({ qloo, agent, stt, tts, voice: tts === "google" ? VOICE : null, media: mediaMode, camera: agentMode() === "live" ? "live" : MOCK ? "mock" : "unavailable",
     taste: { signals: signalsFor(req.sid).length, min_picks: MIN_PICKS, reserve: TASTE_RESERVE, entities: knownEntities() },
     gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), admin: Boolean(ADMIN_TOKEN), lessons: listTerms().length, engine: ENGINE, schedule_policy: POLICY.version,
-    unavailable: ["pronunciation scoring", "glasses input", "rewards", "encounter detection"] });
+    credits: { rules: credits.RULES, welcome: credits.CONFIG.welcome, word: credits.CONFIG.word, referral: credits.CONFIG.referral },
+    unavailable: ["pronunciation scoring", "glasses input", "mastery bonus", "encounter detection"] });
 }));
+
+// ---- Gloo credits: balance, the ledger's recent rows and this learner's referral link ----
+app.get("/api/credits", (req, res) => {
+  credits.welcome(req.sid); // sessions that predate the ledger get their welcome here
+  credits.sawCode(req.sid, clientIp(req));
+  res.json(credits.summary(req.sid, { origin: originOf(req) }));
+});
+// A visitor who arrived with ?ref=<code>: record the attribution. The reward waits for their first completed word.
+app.post("/api/referrals/claim", (req, res) => {
+  const code = String(req.body?.code ?? "").trim().slice(0, 32);
+  if (!code) return res.status(400).json({ error: "code is required" });
+  res.json(credits.claim({ code, sid: req.sid, ip: clientIp(req) }));
+});
 
 app.post("/api/unlock", (req, res) => {
   if (!PASSCODE) return res.json({ unlocked: true });
@@ -179,7 +199,19 @@ app.post("/api/terms/:id/first-attempt", (req, res) => {
   // Background signal: which sound pieces the attempt carried. Stored, not shown yet.
   const pieces = skipped ? null : scorePieces(termPieces(t), response);
   q.putFirst.run(req.sid, t.id, response, skipped ? 1 : 0, String(t.version), Date.now(), pieces ? JSON.stringify(pieces) : null);
+  credits.activate(req.sid); // a referred learner's first word experience may be complete now
   res.json({ saved: true, pieces });
+});
+
+// ---- Gate beacons: what the client saw at the camera gate (live, denied, unavailable, slow), for the testers report ----
+const BEACON_FIELDS = ["state", "source", "error", "reason", "in_app", "platform", "slow"];
+app.post("/api/beacon", (req, res) => {
+  const event = String(req.body?.event ?? "").slice(0, 24);
+  if (!/^[a-z_]+$/.test(event)) return res.status(400).json({ error: "event is required" });
+  const data = {};
+  for (const k of BEACON_FIELDS) if (req.body?.[k] != null) data[k] = typeof req.body[k] === "boolean" ? req.body[k] : String(req.body[k]).slice(0, 80);
+  q.addBeacon.run(req.sid, event, JSON.stringify(data), Date.now());
+  res.json({ ok: true });
 });
 
 // ---- Spoken input anywhere (first attempt, practice answers): PCM in, transcript out ----
@@ -343,21 +375,25 @@ app.post("/api/glue", wrap(async (req, res) => {
   const recheck = best.term_id ? null : resolveLocal(best.word).best;
   const reviewed = getTerm(best.term_id ?? (recheck?.method === "exact" ? recheck.term_id : null));
   let termId = reviewed?.id ?? q.provisionalByWord.get(req.sid, best.word)?.id ?? null;
-  let created = false;
+  let created = false, spent = null;
   if (!termId) {
     if (!unlocked(req.sid)) return locked(res);
+    if (agentMode() !== "live" && !MOCK) return res.status(503).json({ error: "New words need the lesson agent, which isn't configured here. Try a reviewed lesson." });
+    const lim = take("agent", req.sid);
+    if (!lim.ok) return res.status(429).json({ error: lim.reason });
+    // A drafted word is the one thing that costs Gloo: one per word, charged before the draft and refunded if it fails.
+    // Reviewed lessons and this learner's own earlier drafts never reach here, so repeat scans are free.
+    spent = credits.chargeWord(req.sid, best.word);
+    if (!spent.ok) return res.status(402).json({ error: spent.message, code: "GLOO_EMPTY", balance: spent.balance, word: best.word });
     const id = `p-${randomBytes(5).toString("hex")}`;
     let packet;
     if (agentMode() === "live") {
-      const lim = take("agent", req.sid);
-      if (!lim.ok) return res.status(429).json({ error: lim.reason });
       try { packet = await draftLesson(id, best.word); q.logCall.run(req.sid, "anthropic", "draft_lesson", "ok", null, null, Date.now()); }
       catch (e) { q.logCall.run(req.sid, "anthropic", "draft_lesson", "error", null, null, Date.now()); console.error("draft_lesson:", e.message);
-        return res.status(502).json({ error: "Couldn't draft a lesson for that word right now. Try a reviewed lesson." }); }
-    } else if (MOCK) {
-      packet = syntheticLesson(id, best.word);
+        const back = credits.refundWord(req.sid, best.word);
+        return res.status(502).json({ error: "Couldn't draft a lesson for that word right now. Your Gloo is back. Try again, or a reviewed lesson.", balance: back.balance }); }
     } else {
-      return res.status(503).json({ error: "New words need the lesson agent, which isn't configured here. Try a reviewed lesson." });
+      packet = syntheticLesson(id, best.word);
     }
     q.addProvisional.run(id, req.sid, best.word, packet.origin, JSON.stringify(packet), Date.now());
     termId = id;
@@ -369,7 +405,7 @@ app.post("/api/glue", wrap(async (req, res) => {
     q.putFirst.run(req.sid, termId, `voice capture: "${text}" (speech-to-text transcript, not a pronunciation score)`, 0, String(t.version), Date.now(),
       JSON.stringify(scorePieces(termPieces(t), text)));
   }
-  res.json({ term_id: termId, created, transcript,
+  res.json({ term_id: termId, created, transcript, ...(spent && { credits: { charged: spent.charged, balance: spent.balance } }),
     resolution: { input: text, mode: captured, word: best.word, method, score: best.score, decision: local.decision }, alternatives });
 }));
 
@@ -397,6 +433,7 @@ app.post("/api/learner/cues", wrap(async (req, res) => {
     entityId = entityName ? await resolveEntity((op, args) => runQloo(req.sid, op, args), entityName, entityType, live ? {} : { budget: () => 0 }) : null;
   }
   q.addCue.run(req.sid, t.id, b.role, label, connection, source, entityId, entityType, 1, Date.now(), entityName, hook, rank);
+  if (source === "pick") credits.activate(req.sid);
   res.json(q.cuesFor.all(req.sid, t.id));
 }));
 
@@ -547,6 +584,14 @@ const lessonErrors = (e, res) => {
 
 app.get("/api/admin/lessons", admin, (req, res) => res.json(lessons.summaries()));
 
+// The testers report: every session since ?hours (default 48), where it stopped, what went wrong. ?format=text for a terminal.
+app.get("/api/admin/testers", admin, (req, res) => {
+  const hours = Math.min(24 * 30, Math.max(0.1, Number(req.query.hours ?? 48) || 48));
+  const report = testersReport(db, { since: Date.now() - hours * 3600e3 });
+  if (req.query.format === "text") return res.type("text/plain").send(testersText(report));
+  res.json(report);
+});
+
 app.get("/api/admin/lessons/:id", admin, (req, res) => {
   const doc = lessons.get(req.params.id);
   if (!doc) return res.status(404).json({ error: "unknown lesson" });
@@ -656,9 +701,22 @@ app.post("/api/admin/lessons/draft", admin, wrap(async (req, res) => {
   res.status(201).json(adminView(doc));
 }));
 
+// ---- Owner: the credit ledger of one session, and adjustments (refunds, reversals after confirmed abuse, top-ups) ----
+app.get("/api/admin/credits/:sid", admin, (req, res) => {
+  if (!/^[a-f0-9]{32}$/.test(req.params.sid)) return res.status(400).json({ error: "sid is 32 hex characters" });
+  res.json(credits.adminView(req.params.sid));
+});
+app.post("/api/admin/credits/:sid/adjust", admin, (req, res) => {
+  if (!/^[a-f0-9]{32}$/.test(req.params.sid)) return res.status(400).json({ error: "sid is 32 hex characters" });
+  const b = req.body ?? {};
+  const out = credits.adjust({ sid: req.params.sid, delta: b.delta, reason: b.reason, by: req.editor, referral_id: b.referral_id ?? null, idempotency_key: b.idempotency_key ?? null });
+  if (out.error) return res.status(400).json({ error: out.error });
+  res.status(out.written ? 201 : 200).json(out);
+});
+
 // ---- Learner data controls ----
 app.get("/api/diagnostics", (req, res) => res.json({ calls: q.callCounts.all(req.sid) }));
-app.get("/api/export", (req, res) => res.json(exportLearner(req.sid)));
+app.get("/api/export", (req, res) => res.json({ ...exportLearner(req.sid), ...credits.exportCredits(req.sid) }));
 app.delete("/api/learner", (req, res) => { deleteLearner(req.sid); res.json({ deleted: true }); });
 
 // Allow-listed passthrough to any Qloo workflow (schemas validated by qloo mcp).
