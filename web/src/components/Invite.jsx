@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { isPhone } from "../lib/device.js";
 
 // Gloo credits (decision 33): the balance mark is the token and a number, nothing else; the invite action hands
@@ -13,18 +14,27 @@ export function Balance({ credits }) {
   );
 }
 
-// Share the link, or copy it. Returns a short line for the toast.
+// Share the link, or copy it. Returns { done } for the button's own label, or { show } when the link has to be shown.
 export async function inviteFriend(credits) {
   const url = credits?.referral?.link ?? `${location.origin}/?ref=${credits?.referral?.code ?? ""}`;
   const text = `Gloo makes hard words stick. Your first ${credits?.welcome === 2 ? "two" : credits?.welcome ?? "few"} words are on us.`;
   if (isPhone() && navigator.share) {
-    try { await navigator.share({ title: "Gloo", text, url }); return "Shared."; }
-    catch (e) { if (e?.name === "AbortError") return ""; }
+    try { await navigator.share({ title: "Gloo", text, url }); return { done: "Shared" }; }
+    catch (e) { if (e?.name === "AbortError") return {}; }
   }
-  try { await navigator.clipboard.writeText(url); return "Invite link copied."; }
-  catch { return url; }
+  try { await navigator.clipboard.writeText(url); return { done: "Link copied" }; }
+  catch { return { show: url }; }
 }
 
+// The confirmation is the button's own label for a moment: a toast would sit behind the lesson sheet.
 export function InviteButton({ credits, say, className = "btn-ghost" }) {
-  return <button className={className} onClick={async () => { const m = await inviteFriend(credits); if (m) say?.(m); }}>Invite a friend</button>;
+  const [done, setDone] = useState("");
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const go = async () => {
+    const r = await inviteFriend(credits);
+    if (r.show) say?.(r.show);
+    if (r.done) { setDone(r.done); clearTimeout(timer.current); timer.current = setTimeout(() => setDone(""), 2500); }
+  };
+  return <button className={className} aria-live="polite" onClick={go}>{done || "Invite a friend"}</button>;
 }

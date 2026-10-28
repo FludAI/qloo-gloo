@@ -150,7 +150,7 @@ export default function App() {
             <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl bg-black/75 px-5 py-4 text-center backdrop-blur" role="alert">
               <p className="text-base leading-snug">{empty}</p>
               <div className="flex items-center gap-2">
-                <InviteButton credits={credits} say={(m) => { setEmpty(""); say(m); }} className="btn-light !py-2" />
+                <InviteButton credits={credits} say={say} className="btn-light !py-2" />
                 <button className="btn-ghost" onClick={() => setEmpty("")}>Not now</button>
               </div>
             </div>
