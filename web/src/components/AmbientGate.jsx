@@ -22,8 +22,11 @@ const CORNERS = [
 ];
 const EASE = "cubic-bezier(.16,1,.3,1)", SNAP = "cubic-bezier(.3,1.5,.5,1)";
 
-export default function AmbientGate({ state, source, access = {}, onStart, onPick }) {
+export default function AmbientGate({ state, source, access = {}, paused = false, onStart, onPick }) {
   const root = useRef(null);
+  const anims = useRef([]);      // the stage's running animations
+  const timer = useRef(null);    // the loop's restart
+  const loopRef = useRef(null);  // the loop, to restart it after a pause
   const blocked = state === "denied" || state === "unavailable";
   // A phone looks at paper through its camera. A desktop's webcam faces the wrong way, and the word is
   // usually on its own screen, so it shares that window; the webcam and a picture stay one tap away.
@@ -46,13 +49,11 @@ export default function AmbientGate({ state, source, access = {}, onStart, onPic
     const r = root.current;
     if (!r) return;
     const q = (n) => [...r.querySelectorAll(`[data-a="${n}"]`)];
-    const anims = [];
-    let timer = null;
     const reduce = reducedMotion();
     const A = (el, kf, d, delay = 0, easing = EASE) => {
       if (!el) return;
       const a = el.animate(kf, { duration: reduce ? 0 : d, delay: reduce ? 0 : delay, easing, fill: "forwards" });
-      anims.push(a); return a;
+      anims.current.push(a); return a;
     };
     const INK = "#1d1a16", PAPER = "#f6f1e7";
 
@@ -81,16 +82,24 @@ export default function AmbientGate({ state, source, access = {}, onStart, onPic
       const out = 8200;
       [word, mean, ret, ...sounds, ...ticks].forEach((el) => A(el, [{ opacity: 1 }, { opacity: 0 }], 700, out, "ease-in"));
       pieces.forEach((p, i) => A(p, [{ marginLeft: i ? "14px" : "0px" }, { marginLeft: "0px" }], 1, out + 720));
-      timer = setTimeout(() => { anims.forEach((a) => a.cancel()); anims.length = 0; loop(); }, out + 1000);
+      timer.current = setTimeout(() => { anims.current.forEach((a) => a.cancel()); anims.current.length = 0; loop(); }, out + 1000);
     };
+    loopRef.current = loop;
     // The copy rises once and stays; the loop's restart only cancels the stage's animations.
     const intro = q("copy").map((el, i) => el.animate([{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }], { duration: reduce ? 0 : 700, delay: reduce ? 0 : 900 + i * 160, easing: EASE, fill: "forwards" }));
     loop();
-    return () => { clearTimeout(timer); [...anims, ...intro].forEach((a) => a.cancel()); };
+    return () => { clearTimeout(timer.current); [...anims.current, ...intro].forEach((a) => a.cancel()); anims.current.length = 0; };
   }, []);
 
+  // A lesson open over the gate: the loop holds still and the gate recedes; when the lesson closes it starts again from the top.
+  useEffect(() => {
+    if (paused) { clearTimeout(timer.current); anims.current.forEach((a) => a.pause()); return; }
+    if (!loopRef.current || !anims.current.length) return;
+    anims.current.forEach((a) => a.cancel()); anims.current.length = 0; loopRef.current();
+  }, [paused]);
+
   return (
-    <div ref={root} className="absolute inset-0 overflow-hidden" style={{ background: "radial-gradient(120% 90% at 50% 40%, #16140f 0%, #000 70%)" }}>
+    <div ref={root} className="absolute inset-0 overflow-hidden transition-opacity duration-500" style={{ background: "radial-gradient(120% 90% at 50% 40%, #16140f 0%, #000 70%)", opacity: paused ? 0.18 : 1 }}>
       <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.2) 40%, rgba(0,0,0,.65))" }} />
       <div className="relative flex h-full flex-wrap-reverse content-center items-center justify-center gap-x-10 gap-y-2 px-7 pb-8 pt-16 sm:pb-12 sm:pt-20">
         {/* The demo stage */}

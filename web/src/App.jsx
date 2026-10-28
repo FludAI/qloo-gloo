@@ -129,7 +129,7 @@ export default function App() {
           </div>
         </div>
 
-        {!live && <AmbientGate state={camState} source={source} access={access} onStart={openCamera} onPick={showPicture} />}
+        {!live && <AmbientGate state={camState} source={source} access={access} paused={Boolean(sheet) || wordsOpen || info} onStart={openCamera} onPick={showPicture} />}
 
         {live && (<>
           <p className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-paper/80" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 2.2rem)" }}>
