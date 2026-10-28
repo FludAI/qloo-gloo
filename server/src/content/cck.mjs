@@ -56,7 +56,7 @@ export const cck = {
     { id: "kin", label: "kin = movement (said KY)", part: "kin", say: "ky", ipa: "kaɪ", ipa_syllables: ["kaɪ"], meaning: "movement", sound_like: "KY-netic Sand", target: "the sound “ky” / kin", look_for: "something kinetic, said with a long i",
       pick: { question: "Here, kin is said like the start of KY-netic Sand. Which do you say?", options: [
         { name: "KY-netic Sand", wiki: "Kinetic Sand", ipa: "ˌkaɪˈnɛtɪk sænd", say: ["ky-netic", "ky netic", "kai netic", "kynetic", "ky", "long i", "the first", "first one", "left"], qloo: { entity: "Kinetic Sand", type: "brand" }, connection: "KY-netic Sand: you already say kin as KY. Kin means movement, and the sand moves." },
-        { name: "kih-NET-ic Sand", wiki: "Kinetic Sand", ipa: "kɪˈnɛtɪk sænd", say: ["kinetic sand", "kinetic", "kih-netic", "kih netic", "short i", "the second", "second one", "right"], qloo: { entity: "Kinetic Sand", type: "brand" }, connection: "Kinetic Sand moves. In cholecystokinin, kin is said KY, like Kentucky's K-Y. Kin means movement." },
+        { name: "kih-NET-ic Sand", wiki: null, ipa: "kɪˈnɛtɪk sænd", say: ["kinetic sand", "kinetic", "kih-netic", "kih netic", "short i", "the second", "second one", "right"], qloo: { entity: "Kinetic Sand", type: "brand" }, connection: "Kinetic Sand moves. In cholecystokinin, kin is said KY, like Kentucky's K-Y. Kin means movement." },
       ] } },
     { id: "in", label: "-in ending", part: "-in", say: "in", ipa: "ɪn", ipa_syllables: ["ɪn"], meaning: "the substance ending", sound_like: "-in", target: "the ending sound “-in”", look_for: "something ending in “-in”",
       pick: { question: "Say the one that ends in “-in”.", options: [

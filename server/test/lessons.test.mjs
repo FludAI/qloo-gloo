@@ -65,6 +65,15 @@ test("the bucket wins over the SQLite cache, and the cache fills in when the buc
   assert.equal(c.get("brier-score").version, 2);
 });
 
+test("a pick option may carry its own https picture and shop link; anything else is refused", () => {
+  const { packet, problems } = applyPatch(fromCode(cck), { roles: [{ id: "kin", pick: { options: [{ index: 0, image: "https://m.example-cdn.com/kinetic.jpg", link: "https://www.example.com/kinetic?tag=gloo" }] } }] });
+  assert.deepEqual(problems, []);
+  assert.deepEqual(validatePacket(packet), []);
+  const bad = applyPatch(fromCode(cck), { roles: [{ id: "kin", pick: { options: [{ index: 0, image: "http://insecure/x.jpg", link: "javascript:alert(1)" }] } }] }).packet;
+  const errs = validatePacket(bad);
+  assert.ok(errs.some((e) => e.includes("options[0].image")) && errs.some((e) => e.includes("options[0].link")), errs.join("\n"));
+});
+
 test("merge patch removes a pick option with { index, remove: true } and sets an option's ipa", () => {
   const before = fromCode(cck).roles.find((r) => r.id === "kin").pick.options.length;
   const { packet, problems } = applyPatch(fromCode(cck), { roles: [{ id: "kin", pick: { options: [{ index: 0, ipa: "ˌkaɪˈnɛtɪk sænd" }, { index: 1, remove: true }] } }] });

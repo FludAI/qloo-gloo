@@ -129,6 +129,8 @@ export function validatePacket(p) {
           if (o.say != null && !strList(o.say, 60)) bad(`${oat}.say: a list of spoken forms`);
           if (!optStr(o.connection, 240)) bad(`${oat}.connection: a string`);
           if (!optStr(o.ipa, 80)) bad(`${oat}.ipa: IPA for the voice to say the name, or null`);
+          if (o.image != null && !/^https:\/\/[^\s"']{8,500}$/.test(String(o.image))) bad(`${oat}.image: an https picture URL (an affiliate program's own image link), or null`);
+          if (o.link != null && !/^https:\/\/[^\s"']{8,500}$/.test(String(o.link))) bad(`${oat}.link: an https shop link, or null`);
           if (o.qloo != null && !(typeof o.qloo === "object" && isStr(o.qloo.entity, 80) && optStr(o.qloo.type, 40))) bad(`${oat}.qloo: { entity, type } or null`);
         });
       }
@@ -181,7 +183,7 @@ const TOP_SCALARS = ["title", "summary", "definition", "scene", "origin", "formu
 const TOP_LISTS = ["aliases", "components", "family", "distinctions", "transfer", "sources", "rules", "examples", "editorial_cues"];
 const TOP_OBJECTS = ["pronunciation", "first_attempt", "graph"];
 const ROLE_FIELDS = ["label", "part", "say", "ipa", "ipa_syllables", "sound_like", "meaning", "target", "look_for"];
-const OPTION_FIELDS = ["name", "wiki", "say", "connection", "qloo", "ipa"];
+const OPTION_FIELDS = ["name", "wiki", "say", "connection", "qloo", "ipa", "image", "link"];
 const PROMPT_FIELDS = ["skill", "type", "question", "hint", "answer", "accept_all", "accept_any", "expected", "options", "misconceptions", "bonus"];
 const META = new Set(["id", "version", "review_status", "reviewed_at", "edited_by", "edited_at", "history", "provisional", "promoted_from", "pending"]);
 
@@ -318,7 +320,7 @@ export function pathToPatch(path, value) {
       const o = /^\d+$/.test(rest[2]) ? { index: Number(rest[2]) } : { name: rest[2] };
       return { roles: [{ ...keyed(key), pick: { options: [{ ...o, [rest[3]]: value }] } }] };
     }
-    err("needs roles[<id>].pick.question or roles[<id>].pick.options[<n>].<name|wiki|say|connection|qloo|ipa>");
+    err("needs roles[<id>].pick.question or roles[<id>].pick.options[<n>].<name|wiki|say|connection|qloo|ipa|image|link>");
   }
   err("not an editable field");
 }

@@ -58,7 +58,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
   const onSaid = (transcript) => { const o = matchOption(transcript, role.pick.options); choose(o ? o.name : transcript.trim().replace(/^(my favorite( one)? is|it's|its|i like|i love)\s+/i, "").slice(0, 40), o); };
 
   if (reveal) {
-    const art = reveal.option?.wiki ? `/api/art?t=${encodeURIComponent(reveal.option.wiki)}` : null;
+    const art = reveal.option?.image ?? (reveal.option?.wiki ? `/api/art?t=${encodeURIComponent(reveal.option.wiki)}` : null);
     const a = reveal.fresh; // animate only on a fresh pick, not when revisiting
     return (
       <section className="mt-3">
@@ -73,7 +73,8 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
             </div>
           </div>
         </div>
-        <p className="mt-2 text-center text-xs text-paper/50">{reveal.label}{reveal.custom ? " · your own pick" : ""}</p>
+        <p className="mt-2 text-center text-xs text-paper/50">{reveal.label}{reveal.custom ? " · your own pick" : ""}
+          {reveal.option?.link && <> · <a className="underline underline-offset-2" href={reveal.option.link} target="_blank" rel="sponsored nofollow noopener">shop</a> <span className="font-mono text-[10px]">ad</span></>}</p>
         <div className="mt-3 flex items-center justify-between">
           <button className="btn-ghost" onClick={() => { hush(); setReveal(null); }}>Change</button>
           <button className="btn-light" onClick={onNext}>Next</button>
@@ -88,8 +89,8 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
         <div className="grid h-full grid-cols-2 gap-3">
           {role.pick.options.slice(0, 4).map((o) => (
             <button key={o.name} ref={(n) => { tiles.current[o.name] = n; }} className={`tile-img ${picking && picking !== o.name ? "fall-back" : ""} ${o.taste != null ? "ring-1 ring-gloo/60" : ""}`} disabled={!!picking} onClick={() => choose(o.name, o)} aria-label={o.name} data-taste={o.taste ?? undefined}>
-              <Picture src={o.wiki ? `/api/art?t=${encodeURIComponent(o.wiki)}` : null} name={o.name} />
-              <span className="tile-cap">{o.name}</span>
+              <Picture src={o.image ?? (o.wiki ? `/api/art?t=${encodeURIComponent(o.wiki)}` : null)} name={o.name} />
+              <span className="tile-cap">{o.name}{o.link && <span className="ml-1 font-mono text-[9px] opacity-70">ad</span>}</span>
             </button>
           ))}
         </div>
