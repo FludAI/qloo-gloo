@@ -34,6 +34,7 @@ done
 gcloud run deploy qloo-gloo --source . --region $REGION \
   --allow-unauthenticated \
   --set-secrets QLOO_API_KEY=qloo-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,ADMIN_TOKEN=gloo-admin-token:latest \
+  --update-env-vars CREDITS_WELCOME=5,PUBLIC_URL=https://gloo.news \
   --min-instances 1 --max-instances 1 --session-affinity \
   --memory 1Gi --cpu 1 --timeout 120
 ```
