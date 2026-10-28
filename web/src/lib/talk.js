@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { browserSpeechSupported, micSupported, startBrowserSpeech, startPcmRecording } from "./audio.js";
+import { micFix } from "./device.js";
 
 const MAX_SECONDS = 7;
 
@@ -56,7 +57,7 @@ export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListenin
     } catch (err) {
       rec.current = null;
       const msg = err?.name === "NotAllowedError" || err?.code === "not-allowed"
-        ? "Microphone is blocked. Allow it in your browser's site settings, or type the word."
+        ? micFix()
         : "Couldn't start the microphone.";
       setError(msg); onError?.(Object.assign(err ?? new Error(msg), { message: msg }));
     }

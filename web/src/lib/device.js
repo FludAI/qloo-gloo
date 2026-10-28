@@ -18,6 +18,11 @@ export function imageFrom(dataTransfer) {
   return f ?? null;
 }
 
+// How to unblock the microphone on this device, said once; a refused mic needs a settings change and a reload.
+export const micFix = () => isIOS()
+  ? "Microphone is blocked. Tap aA in the address bar, then Website Settings, set Microphone to Allow, and reload."
+  : isPhone() ? "Microphone is blocked. Tap the lock in the address bar, allow the microphone, and reload."
+  : "Microphone is blocked. Click the camera icon in the address bar, allow the microphone, and reload.";
 export const isIOS = () => typeof navigator !== "undefined" && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform)));
 
 // The embedded browser inside another app: on iOS it has no camera, or asks and then fails without a word.

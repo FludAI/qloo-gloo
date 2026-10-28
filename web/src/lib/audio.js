@@ -78,6 +78,7 @@ export function startBrowserSpeech() {
   rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
   let settle;
   const done = new Promise((resolve, reject) => { settle = { resolve, reject }; });
+  done.catch(() => {}); // a refusal before stop() is called is reported through stop(), never as an unhandled rejection
   let transcript = "";
   rec.onresult = (e) => { transcript = e.results[0]?.[0]?.transcript ?? ""; };
   rec.onerror = (e) => { const err = new Error(e.error === "not-allowed" ? "Microphone permission was denied." : "Didn't catch that."); err.code = e.error; settle.reject(err); };

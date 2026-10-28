@@ -42,15 +42,16 @@ const Camera = forwardRef(function Camera({ onState, scan = null, children }, re
     set("starting", { source: which });
     // The permission prompt can be hidden, dismissed, or never shown (an embedded browser): after a while the gate says so.
     const slow = setTimeout(() => set("starting", { source: which, slow: true }), SLOW_MS);
-    let mic = false, stream;
+    let mic = false, micError = null, stream;
     try {
       if (which === "screen") {
         stream = await navigator.mediaDevices.getDisplayMedia(SCREEN);
         mic = await askMic();
       } else {
-        // One prompt for both, in the tap that asked for it. If the pair is refused, retry video alone.
+        // One prompt for both, in the tap that asked for it. If the pair is refused, retry video alone and keep
+        // the reason: a camera-only success after a refused pair means the microphone is blocked for this site.
         try { stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: true }); mic = true; }
-        catch { stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false }); }
+        catch (e) { micError = e?.name ?? "Error"; stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false }); }
       }
     } catch (e) {
       clearTimeout(slow);
@@ -64,7 +65,7 @@ const Camera = forwardRef(function Camera({ onState, scan = null, children }, re
     const v = videoRef.current;
     v.srcObject = stream;
     try { await v.play(); } catch { /* autoplay policies: the muted inline video still shows frames */ }
-    set("live", { mic, source: which });
+    set("live", { mic, mic_error: mic ? null : micError, source: which });
   };
 
   // A picture of the word: a file from the camera roll, a paste, or a drop.

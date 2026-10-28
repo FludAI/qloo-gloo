@@ -10,7 +10,7 @@ import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
 import { CameraIcon, CloseIcon, InfoIcon, MicIcon, PictureIcon } from "./components/Icons.jsx";
 import { Balance, InviteButton } from "./components/Invite.jsx";
-import { imageFrom, inAppBrowser, isIOS, isPhone } from "./lib/device.js";
+import { imageFrom, inAppBrowser, isIOS, isPhone, micFix } from "./lib/device.js";
 
 // Gloo is a camera. Camera and mic on (phone or glasses), or a shared window on a desktop, or a picture of
 // the word; you don't proceed without one of them. No typing anywhere.
@@ -22,6 +22,7 @@ export default function App() {
   const [terms, setTerms] = useState([]);
   const [camState, setCamState] = useState("idle");
   const [micGranted, setMicGranted] = useState(false);
+  const [micBlocked, setMicBlocked] = useState(null); // the error name when the pair was refused and only the camera opened
   const [source, setSource] = useState(null); // camera | screen | image
   const [access, setAccess] = useState({}); // { slow, error, reason }: what the last permission request reported
   const picker = useRef(null);
@@ -91,9 +92,9 @@ export default function App() {
   const showPicture = (file) => { if (!file) return; warmAudio(); unlockAudio(); cam.current?.show(file); };
   const onCamState = (s, extra) => {
     setCamState(s); setSource(extra?.source ?? null); setAccess({ slow: Boolean(extra?.slow), error: extra?.error ?? null, reason: extra?.reason ?? null });
-    if (s === "live") setMicGranted((m) => m || Boolean(extra?.mic));
+    if (s === "live") { setMicGranted((m) => m || Boolean(extra?.mic)); setMicBlocked(extra?.mic ? null : extra?.mic_error ?? null); }
     // What the gate saw, for the testers report: no names, no addresses, just the outcome and the kind of browser.
-    if (s === "live" || s === "denied" || s === "unavailable" || extra?.slow) api.beacon({ event: "gate", state: s, source: extra?.source ?? null, error: extra?.error ?? null, reason: extra?.reason ?? null, slow: Boolean(extra?.slow), in_app: inAppBrowser(), platform: isIOS() ? "ios" : isPhone() ? "android" : "desktop" });
+    if (s === "live" || s === "denied" || s === "unavailable" || extra?.slow) api.beacon({ event: "gate", state: s, source: extra?.source ?? null, error: extra?.error ?? extra?.mic_error ?? null, reason: extra?.reason ?? (extra?.mic_error ? "mic refused, camera only" : null), slow: Boolean(extra?.slow), in_app: inAppBrowser(), platform: isIOS() ? "ios" : isPhone() ? "android" : "desktop" });
   };
   // A screenshot pasted or an image dropped anywhere on the page is the word.
   useEffect(() => {
@@ -123,6 +124,11 @@ export default function App() {
           <p className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-paper/80" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 2.2rem)" }}>
             {busy || (talk.listening ? "Listening… release when done" : source === "camera" ? "Frame the word and tap, or hold the mic and say it." : "Drag the word into the frame, then tap or hold the mic and say it.")}
           </p>
+          {micBlocked && !busy && !sheet && (
+            <p className="pointer-events-none absolute inset-x-0 z-10 px-8 text-center text-[13px] leading-snug text-gloo" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 0.6rem)" }}>
+              {micFix()} <span className="font-mono text-[11px] text-paper/50">{micBlocked}</span>
+            </p>
+          )}
           {terms.length > 0 && !sheet && (
             <div className="absolute inset-x-0 z-10 flex gap-2 overflow-x-auto px-4 pb-1" style={{ bottom: "calc(8.5rem + env(safe-area-inset-bottom))", scrollbarWidth: "none" }}>
               {terms.map((t) => (
