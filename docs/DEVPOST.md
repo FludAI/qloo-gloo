@@ -67,6 +67,7 @@ Gloo is a camera overlay, like a lens for words. No typing, no reading, no forms
 - **Names Qloo cannot see.** RC Cola and Inca Kola are not in the brand graph, and "Sisters" is ambiguous. The loop takes the exact-name candidate, remembers dead names, and keeps the editorial order when in doubt.
 - **The voice said "chole" three ways.** Fixed by pinning each piece to IPA and its hook's sound, and teaching the reviewer that a hook-pinned piece is deliberate.
 - **Credits are finite.** A global daily cap, a reserve, a week-long cache, and no call before the second pick.
+- **Every iPhone browser is Safari.** Chrome and Firefox on iOS run on Safari's engine, so its quirks follow the learner everywhere: the camera prompt can vanish inside an in-app browser, a per-site Deny hides it for good, and the engine sometimes drops the clip inside our logo's SVG, turning the teal paw all gold. The gate now names an in-app browser, times out a silent prompt with a next step, shows the iPhone-specific fix on a refusal, and the logo is inline so its clip holds. A laptop's webcam faces the wrong way, so a desktop shares its screen instead.
 
 ## What we learned
 
