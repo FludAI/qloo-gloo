@@ -11,7 +11,14 @@ const MAX_SECONDS = 7;
 // onLevel(rms, seconds): the loudness of the learner's voice per ~50 ms frame while recording (pcm mode only).
 // onListening(bool): the hold started / ended.
 // Returns { mode, listening, holdProps, error }.
-export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListening }) {
+// Whether this page has been granted the microphone yet: "unknown" until the first hold, then "granted" or "blocked".
+let micState = "unknown";
+const micListeners = new Set();
+export const micStatus = () => micState;
+const setMicState = (s) => { if (micState === s) return; micState = s; micListeners.forEach((f) => f(s)); };
+
+export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListening, onMic }) {
+  useEffect(() => { if (!onMic) return; micListeners.add(onMic); return () => micListeners.delete(onMic); }, [onMic]);
   const mode = stt === "google" || stt === "mock" ? (micSupported() ? "pcm" : browserSpeechSupported() ? "browser" : "none")
     : browserSpeechSupported() ? "browser" : "none";
   const [listening, setListening] = useState(false);
@@ -49,6 +56,7 @@ export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListenin
       const claim = { kind: "pending" }; // claim the slot before the await so a second press doesn't start twice
       rec.current = claim;
       const r = mode === "pcm" ? { kind: "pcm", handle: await startPcmRecording({ onLevel }) } : { kind: "browser", handle: startBrowserSpeech() };
+      if (mode === "pcm") setMicState("granted");
       if (rec.current !== claim) { try { r.handle.stop(); } catch { /* fine */ } return; } // released meanwhile
       rec.current = r;
       setListening(true);
@@ -56,9 +64,9 @@ export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListenin
       timer.current = setTimeout(stop, MAX_SECONDS * 1000);
     } catch (err) {
       rec.current = null;
-      const msg = err?.name === "NotAllowedError" || err?.code === "not-allowed"
-        ? micFix()
-        : "Couldn't start the microphone.";
+      const blocked = err?.name === "NotAllowedError" || err?.code === "not-allowed";
+      if (blocked) setMicState("blocked");
+      const msg = blocked ? micFix() : "Couldn't start the microphone.";
       setError(msg); onError?.(Object.assign(err ?? new Error(msg), { message: msg }));
     }
   }, [mode, stop, onError, onLevel, onListening]);
@@ -72,5 +80,5 @@ export function useHoldToTalk({ stt, onPcm, onText, onError, onLevel, onListenin
     onKeyUp: (e) => { if (e.key === " " || e.key === "Enter") stop(); },
     style: { touchAction: "none", WebkitUserSelect: "none", userSelect: "none" },
   };
-  return { mode, listening, holdProps, error, clearError: () => setError("") };
+  return { mode, listening, holdProps, error, mic: micState, clearError: () => setError("") };
 }

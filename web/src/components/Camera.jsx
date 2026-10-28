@@ -30,11 +30,6 @@ const Camera = forwardRef(function Camera({ onState, scan = null, children }, re
     if (videoRef.current) videoRef.current.srcObject = null;
   };
 
-  // The mic permission, asked in the same tap. Audio is captured only while the mic is held (talk.js).
-  const askMic = async () => {
-    try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach((t) => t.stop()); return true; } catch { return false; }
-  };
-
   const start = async (which = "camera") => {
     if (!navigator.mediaDevices?.getUserMedia) return set("unavailable", { reason: "This browser can't open the camera.", source: which });
     if (which === "screen" && !navigator.mediaDevices.getDisplayMedia) return set("unavailable", { reason: "This browser can't share a window.", source: which });
@@ -42,30 +37,23 @@ const Camera = forwardRef(function Camera({ onState, scan = null, children }, re
     set("starting", { source: which });
     // The permission prompt can be hidden, dismissed, or never shown (an embedded browser): after a while the gate says so.
     const slow = setTimeout(() => set("starting", { source: which, slow: true }), SLOW_MS);
-    let mic = false, micError = null, stream;
+    let stream;
     try {
-      if (which === "screen") {
-        stream = await navigator.mediaDevices.getDisplayMedia(SCREEN);
-        mic = await askMic();
-      } else {
-        // One prompt for both, in the tap that asked for it. If the pair is refused, retry video alone and keep
-        // the reason: a camera-only success after a refused pair means the microphone is blocked for this site.
-        try { stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: true }); mic = true; }
-        catch (e) { micError = e?.name ?? "Error"; stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false }); }
-      }
+      // The camera (or the window) alone. The microphone is asked for the first time the learner holds the mic
+      // (talk.js), so a refusal of one never poisons the other, and the prompt comes with a visible reason.
+      stream = which === "screen" ? await navigator.mediaDevices.getDisplayMedia(SCREEN) : await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false });
     } catch (e) {
       clearTimeout(slow);
       return set(e?.name === "NotAllowedError" || e?.name === "SecurityError" ? "denied" : "unavailable", { reason: e?.message, error: e?.name ?? "Error", source: which });
     }
     clearTimeout(slow);
-    stream.getAudioTracks().forEach((t) => t.stop());
     streamRef.current = stream;
     // A share the user ends from the browser's own bar takes the viewfinder with it.
     stream.getVideoTracks()[0]?.addEventListener("ended", () => { if (streamRef.current === stream) { stop(); setSource(null); set("idle", { source: null }); } });
     const v = videoRef.current;
     v.srcObject = stream;
     try { await v.play(); } catch { /* autoplay policies: the muted inline video still shows frames */ }
-    set("live", { mic, mic_error: mic ? null : micError, source: which });
+    set("live", { source: which });
   };
 
   // A picture of the word: a file from the camera roll, a paste, or a drop.

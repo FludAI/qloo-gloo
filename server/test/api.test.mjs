@@ -403,6 +403,7 @@ test("a gate beacon is stored per session, and the owner's report shows where ea
   assert.equal((await s("POST", "/api/beacon", { event: "bad event!" })).status, 400);
   const t = session();
   await t("POST", "/api/beacon", { event: "gate", state: "live", source: "screen", platform: "desktop" });
+  await t("POST", "/api/beacon", { event: "mic", state: "blocked", error: "NotAllowedError", platform: "desktop" });
   await t("POST", "/api/terms/cholecystokinin/first-attempt", { skipped: true });
   await t("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: "chole", label: "Pepsi-Cola", connection: "Pepsi ≈ chole.", source: "pick", recognized: true });
   const open = await fetch(`http://localhost:${PORT}/api/admin/testers`);
@@ -413,6 +414,7 @@ test("a gate beacon is stored per session, and the owner's report shows where ea
   assert.equal(denied.stage, "visited"); assert.equal(denied.gate.in_app, "LinkedIn"); assert.equal(denied.gate.platform, "ios");
   const picked = r.rows.find((x) => x.gate?.source === "screen" && x.picks === 1);
   assert.equal(picked.stage, "pick"); assert.deepEqual(picked.lessons, ["cholecystokinin"]);
+  assert.deepEqual(picked.mic, { state: "blocked", error: "NotAllowedError" }, "the microphone's own outcome, apart from the gate");
   assert.ok(r.funnel.visited >= r.funnel.gate && r.funnel.gate >= r.funnel.pick && r.funnel.pick >= 1);
   const text = await (await fetch(`http://localhost:${PORT}/api/admin/testers?hours=1&format=text`, { headers: { "x-gloo-admin": "test-owner-token" } })).text();
   assert.match(text, /funnel: visited \d+ > gate \d+ > read \d+ > lesson \d+ > pick \d+/);

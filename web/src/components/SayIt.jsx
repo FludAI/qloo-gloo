@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { useHoldToTalk } from "../lib/talk.js";
+import { micStatus, useHoldToTalk } from "../lib/talk.js";
 import { MicIcon } from "./Icons.jsx";
 
 // Hold-to-talk that yields text: server speech when available, else the browser's. Hidden when neither exists.
@@ -25,6 +25,7 @@ export default function SayIt({ health, guard, onText, onLevel, onListening, big
         <MicIcon size={big ? 30 : 22} />
       </button>
       {big && <span className="mt-2 text-sm text-paper/70">{talk.listening ? "Listening… release when done" : label ?? "Hold and say it"}</span>}
+      {big && !talk.listening && !talk.error && micStatus() === "unknown" && talk.mode === "pcm" && <span className="mt-1 text-xs text-paper/50">The first time, allow the microphone so Gloo can hear you.</span>}
       {talk.error && <p className={`text-xs text-red-300 ${big ? "mt-1 text-center" : "absolute right-0 top-full mt-1 w-56 text-right"}`}>{talk.error}</p>}
     </div>
   );

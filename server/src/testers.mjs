@@ -17,7 +17,8 @@ export function testersReport(db, { since = Date.now() - 48 * 3600e3 } = {}) {
   const sessions = learners.map(({ sid, created_at }) => {
     const b = beacons.all(sid).map((r) => ({ event: r.event, at: r.created_at, ...safeJson(r.data) }));
     const c = calls.all(sid), f = firsts.all(sid), cu = cues.all(sid), a = attempts.all(sid), d = drafts.all(sid), r = resolutions.all(sid);
-    const gates = b.filter((x) => x.event === "gate");
+    const gates = b.filter((x) => x.event === "gate"), mics = b.filter((x) => x.event === "mic");
+    const mic = mics[mics.length - 1] ?? null;
     const last = gates[gates.length - 1] ?? null;
     const live = gates.some((x) => x.state === "live");
     const reads = c.filter((x) => x.provider === "anthropic" && x.op === "read_word");
@@ -31,6 +32,7 @@ export function testersReport(db, { since = Date.now() - 48 * 3600e3 } = {}) {
     return {
       sid: sid.slice(0, 8), started_at: created_at, last_seen: lastSeen, stage,
       gate: last ? { state: last.state ?? null, source: last.source ?? null, error: last.error ?? null, in_app: last.in_app ?? null, platform: last.platform ?? null, slow: Boolean(last.slow) } : null,
+      mic: mic ? { state: mic.state ?? null, error: mic.error ?? null } : null,
       reads: { tried: reads.length, ok: readOk }, captures,
       lessons: f.map((x) => x.term_id), picks: picks.length, taste_picks: picks.filter((x) => x.hook_source === "taste").length,
       voice_lines: c.filter((x) => x.provider === "google-tts").length, heard: c.filter((x) => x.provider === "google-stt").length,
@@ -48,10 +50,11 @@ export function testersText(report) {
   const t = (ms) => new Date(ms).toISOString().slice(5, 16).replace("T", " ");
   const lines = [`sessions since ${new Date(report.since).toISOString()}: ${report.sessions}`,
     "funnel: " + STAGES.map((s) => `${s} ${report.funnel[s]}`).join(" > "), ""];
-  const head = ["sid", "started", "stage", "gate", "src", "where", "reads", "lessons", "picks", "voice", "practice", "drafted", "errors"];
+  const head = ["sid", "started", "stage", "gate", "src", "where", "mic", "reads", "lessons", "picks", "voice", "practice", "drafted", "errors"];
   const rows = report.rows.map((r) => [r.sid, t(r.started_at), r.stage,
     r.gate ? `${r.gate.state}${r.gate.slow ? "+slow" : ""}${r.gate.error ? ` ${r.gate.error}` : ""}` : "-", r.gate?.source ?? "-",
     r.gate ? `${r.gate.platform ?? "?"}${r.gate.in_app ? ` in ${r.gate.in_app}` : ""}` : "-",
+    r.mic ? `${r.mic.state}${r.mic.error ? ` ${r.mic.error}` : ""}` : "-",
     `${r.reads.ok}/${r.reads.tried}`, r.lessons.join(",") || "-", `${r.picks}${r.taste_picks ? ` (${r.taste_picks} taste)` : ""}`, String(r.voice_lines),
     `${r.practice.correct}/${r.practice.answers}${r.practice.independent ? ` (${r.practice.independent} own)` : ""}`, r.drafted.join(",") || "-", [...new Set(r.errors)].join(",") || "-"]);
   const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => String(r[i]).length)));

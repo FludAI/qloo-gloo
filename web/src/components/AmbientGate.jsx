@@ -34,9 +34,9 @@ export default function AmbientGate({ state, source, access = {}, onStart, onPic
     : inApp ? `You're in ${inApp}'s built-in browser, which can't use the camera. Open this page in ${ios ? "Safari" : "Chrome"}, or use a picture of the word.`
     : "";
   const fix = state === "denied" ? (ios
-      ? "On iPhone: tap aA in the address bar, then Website Settings, and set Camera and Microphone to Allow. Or Settings, Safari, Camera."
-      : phone ? "Tap the lock in the address bar and allow Camera and Microphone, then try again."
-      : "Click the camera icon in the address bar and allow Camera and Microphone, then try again.")
+      ? "On iPhone: tap aA in the address bar, then Website Settings, and set Camera to Allow. Or Settings, Safari, Camera."
+      : phone ? "Tap the lock in the address bar and allow the camera, then try again."
+      : "Click the camera icon in the address bar and allow the camera, then try again.")
     : state === "unavailable" ? "This browser can't open the camera here. Open the page in Safari or Chrome, or use a picture of the word." : "";
   const main = phone || !screen ? "camera" : "screen";
   const file = useRef(null);
@@ -120,14 +120,14 @@ export default function AmbientGate({ state, source, access = {}, onStart, onPic
               : main === "screen" ? <>Gloo works<br />on your <em className="text-gloo">screen.</em></> : <>Gloo works<br />through your <em className="text-gloo">camera.</em></>}
           </h1>
           <p data-a="copy" className="max-w-[330px] text-[15px] leading-relaxed text-paper/80 opacity-0">
-            {state === "denied" ? (source === "screen" ? "Pick the window with the hard word when the browser asks, and allow the microphone. Or use a picture of the word." : fix)
+            {state === "denied" ? (source === "screen" ? "Pick the window with the hard word when the browser asks. Or use a picture of the word." : fix)
               : state === "unavailable" ? fix
-              : main === "screen" ? "Share the window with the hard word and turn on your microphone. Drag the word into the frame and say “gloo it”."
-              : "Turn on your phone's camera and microphone, or wear your smart glasses, to continue. Point at a hard word and say “gloo it”."}
+              : main === "screen" ? "Share the window with the hard word. Drag the word into the frame and say “gloo it”; Gloo asks for the microphone the first time you hold it."
+              : "Turn on your phone's camera, or wear your smart glasses, to continue. Point at a hard word and say “gloo it”; Gloo asks for the microphone the first time you hold it."}
           </p>
           <div data-a="copy" className="flex flex-col items-center gap-3 opacity-0">
             <button className="btn-light" disabled={state === "starting"} onClick={() => onStart(blocked && source ? source : main)}>
-              {main === "screen" ? <ScreenIcon /> : <CameraIcon />} {state === "starting" ? "Waiting for permission…" : blocked ? "Try again" : main === "screen" ? "Share screen and mic" : "Turn on camera and mic"}
+              {main === "screen" ? <ScreenIcon /> : <CameraIcon />} {state === "starting" ? "Waiting for permission…" : blocked ? "Try again" : main === "screen" ? "Share your screen" : "Turn on the camera"}
             </button>
             <div className="min-h-[18px] max-w-[330px] text-[13px] text-paper/70">{note}</div>
             {blocked && access.error && <div className="font-mono text-[11px] text-paper/40">{access.error}{access.reason ? ` · ${String(access.reason).slice(0, 80)}` : ""}</div>}

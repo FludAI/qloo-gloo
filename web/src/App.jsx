@@ -22,7 +22,7 @@ export default function App() {
   const [terms, setTerms] = useState([]);
   const [camState, setCamState] = useState("idle");
   const [micGranted, setMicGranted] = useState(false);
-  const [micBlocked, setMicBlocked] = useState(null); // the error name when the pair was refused and only the camera opened
+  const [micBlocked, setMicBlocked] = useState(null); // set when the first hold is refused
   const [source, setSource] = useState(null); // camera | screen | image
   const [access, setAccess] = useState({}); // { slow, error, reason }: what the last permission request reported
   const picker = useRef(null);
@@ -82,8 +82,13 @@ export default function App() {
     if (!f) return say(source === "camera" ? "Point the camera at a word first." : "Move the word into the frame first.");
     glue({ mode: "camera", ...f }, "Reading…");
   };
+  // The microphone's own outcome, at the first hold anywhere on the page: shown on the live view and sent to the report.
+  const onMic = useCallback((state) => {
+    setMicGranted(state === "granted"); setMicBlocked(state === "blocked" ? "NotAllowedError" : null);
+    api.beacon({ event: "mic", state, error: state === "blocked" ? "NotAllowedError" : null, platform: isIOS() ? "ios" : isPhone() ? "android" : "desktop" });
+  }, []);
   const talk = useHoldToTalk({
-    stt: health?.stt,
+    stt: health?.stt, onMic,
     onPcm: ({ pcm16 }) => glue({ mode: "voice", pcm16, ...(frame() ?? {}) }, "Listening…"),
     onText: ({ transcript }) => glue({ mode: "voice", text: transcript, ...(frame() ?? {}) }, "Listening…"),
   });
@@ -92,9 +97,8 @@ export default function App() {
   const showPicture = (file) => { if (!file) return; warmAudio(); unlockAudio(); cam.current?.show(file); };
   const onCamState = (s, extra) => {
     setCamState(s); setSource(extra?.source ?? null); setAccess({ slow: Boolean(extra?.slow), error: extra?.error ?? null, reason: extra?.reason ?? null });
-    if (s === "live") { setMicGranted((m) => m || Boolean(extra?.mic)); setMicBlocked(extra?.mic ? null : extra?.mic_error ?? null); }
     // What the gate saw, for the testers report: no names, no addresses, just the outcome and the kind of browser.
-    if (s === "live" || s === "denied" || s === "unavailable" || extra?.slow) api.beacon({ event: "gate", state: s, source: extra?.source ?? null, error: extra?.error ?? extra?.mic_error ?? null, reason: extra?.reason ?? (extra?.mic_error ? "mic refused, camera only" : null), slow: Boolean(extra?.slow), in_app: inAppBrowser(), platform: isIOS() ? "ios" : isPhone() ? "android" : "desktop" });
+    if (s === "live" || s === "denied" || s === "unavailable" || extra?.slow) api.beacon({ event: "gate", state: s, source: extra?.source ?? null, error: extra?.error ?? null, reason: extra?.reason ?? null, slow: Boolean(extra?.slow), in_app: inAppBrowser(), platform: isIOS() ? "ios" : isPhone() ? "android" : "desktop" });
   };
   // A screenshot pasted or an image dropped anywhere on the page is the word.
   useEffect(() => {
@@ -210,7 +214,7 @@ function InfoSheet({ health, micGranted, onClose }) {
             {row("Camera reading", health.camera === "live", health.camera)}
             {row("Speech", health.stt === "google", health.stt === "google" ? "server" : health.stt === "mock" ? "mock" : "browser only")}
             {row("Voice", health.tts === "google", health.tts === "google" ? health.voice ?? "server" : "browser only")}
-            {row("Microphone", micGranted, micGranted ? "allowed" : "ask when held")}
+            {row("Microphone", micGranted, micGranted ? "allowed" : "asked at the first hold")}
             {row("Cue agent", health.agent.mode === "live", health.agent.mode === "live" ? health.agent.model : health.agent.mode)}
             {row("Qloo", health.qloo.ready, health.qloo.mode === "mock" ? "mock data" : health.qloo.ready ? "live" : "key missing")}
           </ul>
