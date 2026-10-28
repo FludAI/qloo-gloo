@@ -120,7 +120,7 @@ function shape(id, input, d, origin) {
     distinctions: arr(d.distinctions).slice(0, 4).map((x) => clip(x, 240)),
     sources: arr(d.sources).slice(0, 3).filter((s) => /^https?:\/\//.test(s.url)).map((s) => ({ label: clip(s.label, 100), url: clip(s.url, 300) })),
     roles, editorial_cues: [], graph: { nodes, edges },
-    first_attempt: { question: "How would you say it, or what do you think it means? A guess is fine." },
+    first_attempt: { question: "Try to say this word. Just do your best." },
     prompts: arr(d.prompts).slice(0, 5).map((p, i) => ({
       id: `${id}-q${i + 1}`, skill: p.skill, type: p.type, question: clip(p.question, 300), hint: p.hint ? clip(p.hint, 200) : undefined,
       accept_all: p.accept_all, accept_any: p.accept_any, expected: p.expected, answer: clip(p.answer, 300), misconceptions: p.misconceptions,

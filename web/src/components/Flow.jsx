@@ -106,7 +106,7 @@ function FirstAttempt({ term, health, guard, onSaved }) {
   const [busy, setBusy] = useState(false);
   const plan = useMemo(() => pawPlan(term, term.pieces ?? []), [term.id]);
   const paw = useHeardToes(plan);
-  useEffect(() => { speak(term.first_attempt?.question ?? "How would you say it?", { term }); return hush; }, [term.id]);
+  useEffect(() => { speak(term.first_attempt?.question ?? "Try to say this word. Just do your best.", { term }); return hush; }, [term.id]);
   const save = (body) => guard(async () => {
     setBusy(true);
     try {
@@ -117,7 +117,7 @@ function FirstAttempt({ term, health, guard, onSaved }) {
   });
   return (
     <section className="mt-5">
-      <p className="text-xl leading-snug">{term.first_attempt?.question ?? "How would you say it? A guess is fine."}</p>
+      <p className="text-xl leading-snug">{term.first_attempt?.question ?? "Try to say this word. Just do your best."}</p>
       <PawRow n={plan.count} states={paw.states} size={plan.count > 5 ? 84 : 110} className="mt-4" label={`${plan.count} syllables`} />
       <div className="mt-4"><SayIt big health={health} guard={guard} onText={(t) => save({ response: t })} onLevel={paw.onLevel} onListening={paw.onListening} label="Hold and say it" /></div>
       <button className="mt-6 w-full text-sm text-paper/60 underline" disabled={busy} onClick={() => save({ skipped: true })}>I don't know it yet</button>

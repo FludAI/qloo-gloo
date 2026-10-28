@@ -87,7 +87,7 @@ export const brier = {
       ["brier", "rule", "names"], ["outcome", "rule", "input y"], ["forecast", "rule", "input p"], ["rule", "low", "lower is better"],
     ],
   },
-  first_attempt: { question: "What do you think a Brier score measures? A guess is fine." },
+  first_attempt: { question: "Try to say this word. Just do your best." },
   prompts: [
     { id: "brier-meaning", skill: "meaning", type: "text",
       question: "In your own words, what does a Brier score measure?",
