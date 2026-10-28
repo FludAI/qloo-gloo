@@ -177,6 +177,19 @@ app.get("/api/terms", (req, res) => res.json([
   ...q.provisionalFor.all(req.sid).map((r) => { const p = JSON.parse(r.packet); return { id: r.id, title: p.title, summary: p.summary, provisional: true, origin: r.origin }; }),
 ]));
 
+// The words sheet: reviewed lessons, this learner's recent words (their own drafts included), and the words
+// everyone looked up most in the last seven days (shared lessons only; a learner's private draft stays theirs).
+const recentWords = db.prepare("SELECT term_id, MAX(created_at) AS at FROM resolutions WHERE sid = ? AND term_id IS NOT NULL GROUP BY term_id ORDER BY at DESC LIMIT 8");
+const popularWords = db.prepare("SELECT term_id, COUNT(DISTINCT sid) AS count FROM resolutions WHERE term_id IS NOT NULL AND created_at >= ? GROUP BY term_id ORDER BY count DESC, MAX(created_at) DESC LIMIT 12");
+app.get("/api/words", (req, res) => {
+  const brief = (t) => t && { id: t.id, title: t.title, provisional: Boolean(t.provisional) };
+  const reviewed = listTerms().map(brief);
+  const recent = recentWords.all(req.sid).map((r) => brief(termFor(req.sid, r.term_id))).filter(Boolean);
+  const shared = new Set(listTerms().map((t) => t.id));
+  const popular = popularWords.all(Date.now() - 7 * 86400e3).filter((r) => shared.has(r.term_id)).slice(0, 8).map((r) => ({ ...brief(getTerm(r.term_id)), count: r.count }));
+  res.json({ reviewed, recent, popular });
+});
+
 app.get("/api/terms/:id", wrap(async (req, res) => {
   const t = termFor(req.sid, req.params.id);
   if (!t) return res.status(404).json({ error: "unknown term" });

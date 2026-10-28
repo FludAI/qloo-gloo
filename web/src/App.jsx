@@ -5,10 +5,11 @@ import Flow from "./components/Flow.jsx";
 import Passcode from "./components/Passcode.jsx";
 import AmbientGate from "./components/AmbientGate.jsx";
 import Logo from "./components/Logo.jsx";
+import WordsSheet from "./components/Words.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
-import { CameraIcon, CloseIcon, InfoIcon, MicIcon, PictureIcon } from "./components/Icons.jsx";
+import { CameraIcon, CloseIcon, InfoIcon, MicIcon, PictureIcon, WordsIcon } from "./components/Icons.jsx";
 import { Balance, InviteButton } from "./components/Invite.jsx";
 import { imageFrom, inAppBrowser, isIOS, isPhone, micFix } from "./lib/device.js";
 
@@ -31,6 +32,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [sheet, setSheet] = useState(null); // { termId, glued }
   const [info, setInfo] = useState(false);
+  const [wordsOpen, setWordsOpen] = useState(false);
   const [pass, setPass] = useState(null); // { retry }
   const [credits, setCredits] = useState(null); // Gloo balance and referral link
   const [empty, setEmpty] = useState(""); // the server's line when a new word would cost more Gloo than there is
@@ -41,14 +43,18 @@ export default function App() {
   const loadTerms = useCallback(() => api.terms().then(setTerms).catch(() => {}), []);
   const loadCredits = useCallback(() => api.credits().then(setCredits).catch(() => {}), []);
   useEffect(() => {
-    // A shared link can carry the passcode (?code=...), so nobody has to type it, or a friend's referral (?ref=...).
+    // A shared link can carry the passcode (?code=...), so nobody has to type it, a friend's referral (?ref=...),
+    // or a word (?word=cholecystokinin): its lesson opens over the gate, no camera needed for a word Gloo knows.
     const params = new URLSearchParams(location.search);
-    const code = params.get("code"), ref = params.get("ref");
+    const code = params.get("code"), ref = params.get("ref"), word = params.get("word");
     const boot = Promise.resolve()
       .then(() => (code ? api.unlock(code).catch(() => {}) : null))
       .then(() => (ref ? api.claimReferral(ref).catch(() => {}) : null))
-      .then(() => { if (code || ref) history.replaceState(null, "", location.pathname); });
-    boot.then(() => { loadHealth(); loadTerms(); loadCredits(); });
+      .then(() => { if (code || ref || word) history.replaceState(null, "", location.pathname); });
+    boot.then(() => {
+      loadHealth(); loadTerms(); loadCredits();
+      if (word) { const id = word.toLowerCase().trim(); api.term(id).then(() => setSheet({ termId: id, glued: null })).catch(() => say(`Gloo doesn't know “${word}” yet. Point the camera at it.`)); }
+    });
   }, [loadHealth, loadTerms, loadCredits]);
 
   // Every metered action goes through here: a passcode challenge replays the action once unlocked.
@@ -118,6 +124,7 @@ export default function App() {
           <Logo />
           <div className="flex items-center gap-2">
             <Balance credits={credits} />
+            <button className="round !h-9 !w-9" aria-label="Words" onClick={() => setWordsOpen(true)}><WordsIcon /></button>
             <button className="round !h-9 !w-9" aria-label="About this demo" onClick={() => setInfo(true)}><InfoIcon /></button>
           </div>
         </div>
@@ -170,6 +177,7 @@ export default function App() {
 
       {sheet && <Flow termId={sheet.termId} glued={sheet.glued} health={health} guard={guard} credits={credits} onCredits={loadCredits} say={say}
         onClose={() => { setSheet(null); loadTerms(); }} onRegue={(body) => glue(body, "Gluing…")} />}
+      {wordsOpen && <WordsSheet onPick={(id) => { setWordsOpen(false); warmAudio(); unlockAudio(); setSheet({ termId: id, glued: null }); }} onClose={() => setWordsOpen(false)} />}
       {info && <InfoSheet health={health} micGranted={micGranted} onClose={() => setInfo(false)} />}
       {pass && <Passcode onClose={() => setPass(null)} onUnlocked={async () => { const retry = pass.retry; setPass(null); await loadHealth(); if (retry) guard(retry); }} />}
     </div>

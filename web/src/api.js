@@ -21,6 +21,7 @@ export const api = {
   health: () => get("/api/health"),
   unlock: (code) => post("/api/unlock", { code }),
   terms: () => get("/api/terms"),
+  words: () => get("/api/words"),
   glue: (body) => post("/api/glue", body),
   beacon: (body) => post("/api/beacon", body).catch(() => {}),
   transcribe: (pcm16, prompt_id) => post("/api/transcribe", prompt_id ? { pcm16, prompt_id } : { pcm16 }),

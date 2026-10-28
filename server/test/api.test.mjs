@@ -396,6 +396,20 @@ test("say: the server speaks the pieces from IPA, once; hits are free of the lim
   assert.equal((await raw("/api/say", { text: "x", term_id: "no-such-term" }, cookie)).status, 404);
 });
 
+// ---- The words sheet ----
+test("the words sheet lists reviewed lessons, this learner's recent words, and the words looked up most", async () => {
+  const s = session();
+  const empty = (await s("GET", "/api/words")).body;
+  assert.ok(empty.reviewed.some((w) => w.id === "cholecystokinin") && empty.reviewed.some((w) => w.id === "brier-score"));
+  assert.deepEqual(empty.recent, []);
+  await s("POST", "/api/glue", { mode: "typed", text: "cholecystokinin" });
+  const after = (await s("GET", "/api/words")).body;
+  assert.deepEqual(after.recent.map((w) => w.id), ["cholecystokinin"]);
+  const pop = after.popular.find((w) => w.id === "cholecystokinin");
+  assert.ok(pop && pop.count >= 1 && pop.title.startsWith("Cholecystokinin"));
+  await s("DELETE", "/api/learner");
+});
+
 // ---- Gate beacons and the testers report ----
 test("a gate beacon is stored per session, and the owner's report shows where each session stopped", async () => {
   const s = session();

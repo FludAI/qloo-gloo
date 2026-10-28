@@ -18,6 +18,9 @@ export const InfoIcon = ({ size = 20 }) => (
 export const LockIcon = ({ size = 16 }) => (
   <svg width={size} height={size} {...base}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
 );
+export const WordsIcon = ({ size = 20 }) => (
+  <svg width={size} height={size} {...base}><path d="M4 6h16M4 12h10M4 18h13" /></svg>
+);
 export const ScreenIcon = ({ size = 22 }) => (
   <svg width={size} height={size} {...base}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>
 );
