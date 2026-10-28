@@ -4,6 +4,7 @@ import Camera from "./components/Camera.jsx";
 import Flow from "./components/Flow.jsx";
 import Passcode from "./components/Passcode.jsx";
 import AmbientGate from "./components/AmbientGate.jsx";
+import Logo from "./components/Logo.jsx";
 import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
@@ -94,7 +95,7 @@ export default function App() {
     <div className="relative h-full w-full select-none overflow-hidden bg-black text-paper">
       <Camera ref={cam} onState={onCamState} scan={scan}>
         <div className="safe-top absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4">
-          <img src="/brand/gloo-logo-on-dark.svg" alt="Gloo" className="h-8 w-auto" draggable="false" />
+          <Logo />
           <div className="flex items-center gap-2">
             <button className="round !h-9 !w-9" aria-label="About this demo" onClick={() => setInfo(true)}><InfoIcon /></button>
           </div>
