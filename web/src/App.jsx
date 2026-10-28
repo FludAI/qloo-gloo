@@ -21,6 +21,7 @@ export default function App() {
   const [camState, setCamState] = useState("idle");
   const [micGranted, setMicGranted] = useState(false);
   const [source, setSource] = useState(null); // camera | screen | image
+  const [access, setAccess] = useState({}); // { slow, error, reason }: what the last permission request reported
   const picker = useRef(null);
   const [busy, setBusy] = useState("");
   const [scan, setScan] = useState(null);
@@ -77,7 +78,7 @@ export default function App() {
 
   const openCamera = (which = "camera") => { warmAudio(); unlockAudio(); cam.current?.start(which); };
   const showPicture = (file) => { if (!file) return; warmAudio(); unlockAudio(); cam.current?.show(file); };
-  const onCamState = (s, extra) => { setCamState(s); setSource(extra?.source ?? null); if (s === "live") setMicGranted((m) => m || Boolean(extra?.mic)); };
+  const onCamState = (s, extra) => { setCamState(s); setSource(extra?.source ?? null); setAccess({ slow: Boolean(extra?.slow), error: extra?.error ?? null, reason: extra?.reason ?? null }); if (s === "live") setMicGranted((m) => m || Boolean(extra?.mic)); };
   // A screenshot pasted or an image dropped anywhere on the page is the word.
   useEffect(() => {
     const onPaste = (e) => { const f = imageFrom(e.clipboardData); if (f) { e.preventDefault(); showPicture(f); } };
@@ -99,7 +100,7 @@ export default function App() {
           </div>
         </div>
 
-        {!live && <AmbientGate state={camState} source={source} onStart={openCamera} onPick={showPicture} />}
+        {!live && <AmbientGate state={camState} source={source} access={access} onStart={openCamera} onPick={showPicture} />}
 
         {live && (<>
           <p className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-paper/80" style={{ top: "calc(50% - 22vh/2 - clamp(84px,16vh,150px)/2 - 2.2rem)" }}>

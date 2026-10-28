@@ -17,3 +17,23 @@ export function imageFrom(dataTransfer) {
   const f = [...(dataTransfer?.files ?? [])].find((x) => x.type.startsWith("image/"));
   return f ?? null;
 }
+
+export const isIOS = () => typeof navigator !== "undefined" && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform)));
+
+// The embedded browser inside another app: on iOS it has no camera, or asks and then fails without a word.
+// Returns the app's name, or null in a real browser.
+const IN_APP = [
+  [/FBAN|FBAV|FB_IAB/, "Facebook"], [/Instagram/, "Instagram"], [/LinkedInApp/, "LinkedIn"], [/Twitter|X\/iOS|XApp/, "X"],
+  [/Line\//, "LINE"], [/Snapchat/, "Snapchat"], [/BytedanceWebview|TikTok|musical_ly/, "TikTok"], [/GSA\//, "the Google app"],
+  [/Slack/, "Slack"], [/Teams\//, "Teams"], [/DiscordAndroid|Discord\//, "Discord"], [/Pinterest/, "Pinterest"], [/WhatsApp/, "WhatsApp"],
+  [/Messenger|MessengerLite/, "Messenger"], [/Gmail/, "Gmail"], [/Outlook-iOS|Outlook-Android/, "Outlook"],
+  [/; wv\)/, "another app"], // Android WebView
+];
+export function inAppBrowser() {
+  if (typeof navigator === "undefined") return null;
+  const ua = navigator.userAgent;
+  for (const [re, name] of IN_APP) if (re.test(ua)) return name;
+  // iOS: a WKWebView has no "Safari/" token although it says "Version/x Mobile"; Chrome and Firefox name themselves.
+  if (isIOS() && /Mobile\//.test(ua) && !/Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPT\//.test(ua)) return "another app";
+  return null;
+}

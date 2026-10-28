@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CameraIcon, PictureIcon, ScreenIcon } from "./Icons.jsx";
-import { canShareScreen, isPhone } from "../lib/device.js";
+import { canShareScreen, inAppBrowser, isIOS, isPhone } from "../lib/device.js";
 import { reducedMotion } from "../lib/sfx.js";
 
 // The gate, alive: behind the copy, the lesson loop plays on its own (a word on paper, the frame,
@@ -22,12 +22,22 @@ const CORNERS = [
 ];
 const EASE = "cubic-bezier(.16,1,.3,1)", SNAP = "cubic-bezier(.3,1.5,.5,1)";
 
-export default function AmbientGate({ state, source, onStart, onPick }) {
+export default function AmbientGate({ state, source, access = {}, onStart, onPick }) {
   const root = useRef(null);
   const blocked = state === "denied" || state === "unavailable";
   // A phone looks at paper through its camera. A desktop's webcam faces the wrong way, and the word is
   // usually on its own screen, so it shares that window; the webcam and a picture stay one tap away.
-  const phone = isPhone(), screen = canShareScreen();
+  const phone = isPhone(), screen = canShareScreen(), ios = isIOS(), inApp = inAppBrowser();
+  // What to say under the button: a hidden prompt, an embedded browser, or how to undo a refusal on this device.
+  const note = state === "starting" && access.slow ? "No prompt? Look for a camera question at the top of the screen, or use a picture of the word."
+    : state === "starting" ? "Allow it in the prompt."
+    : inApp ? `You're in ${inApp}'s built-in browser, which can't use the camera. Open this page in ${ios ? "Safari" : "Chrome"}, or use a picture of the word.`
+    : "";
+  const fix = state === "denied" ? (ios
+      ? "On iPhone: tap aA in the address bar, then Website Settings, and set Camera and Microphone to Allow. Or Settings, Safari, Camera."
+      : phone ? "Tap the lock in the address bar and allow Camera and Microphone, then try again."
+      : "Click the camera icon in the address bar and allow Camera and Microphone, then try again.")
+    : state === "unavailable" ? "This browser can't open the camera here. Open the page in Safari or Chrome, or use a picture of the word." : "";
   const main = phone || !screen ? "camera" : "screen";
   const file = useRef(null);
   const pick = (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onPick?.(f); };
@@ -110,8 +120,8 @@ export default function AmbientGate({ state, source, onStart, onPick }) {
               : main === "screen" ? <>Gloo works<br />on your <em className="text-gloo">screen.</em></> : <>Gloo works<br />through your <em className="text-gloo">camera.</em></>}
           </h1>
           <p data-a="copy" className="max-w-[330px] text-[15px] leading-relaxed text-paper/80 opacity-0">
-            {state === "denied" ? (source === "screen" ? "Pick the window with the hard word when the browser asks, and allow the microphone. Or use a picture of the word." : "Allow the camera and microphone for this site in your browser settings, then try again.")
-              : state === "unavailable" ? "Open this on a phone, or on glasses with a camera. Or use a picture of the word."
+            {state === "denied" ? (source === "screen" ? "Pick the window with the hard word when the browser asks, and allow the microphone. Or use a picture of the word." : fix)
+              : state === "unavailable" ? fix
               : main === "screen" ? "Share the window with the hard word and turn on your microphone. Drag the word into the frame and say “gloo it”."
               : "Turn on your phone's camera and microphone, or wear your smart glasses, to continue. Point at a hard word and say “gloo it”."}
           </p>
@@ -119,7 +129,8 @@ export default function AmbientGate({ state, source, onStart, onPick }) {
             <button className="btn-light" disabled={state === "starting"} onClick={() => onStart(blocked && source ? source : main)}>
               {main === "screen" ? <ScreenIcon /> : <CameraIcon />} {state === "starting" ? "Waiting for permission…" : blocked ? "Try again" : main === "screen" ? "Share screen and mic" : "Turn on camera and mic"}
             </button>
-            <div className="min-h-[18px] text-[13px] text-paper/70">{state === "starting" ? "Allow it in the prompt." : ""}</div>
+            <div className="min-h-[18px] max-w-[330px] text-[13px] text-paper/70">{note}</div>
+            {blocked && access.error && <div className="font-mono text-[11px] text-paper/40">{access.error}{access.reason ? ` · ${String(access.reason).slice(0, 80)}` : ""}</div>}
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[13px] text-paper/70">
               {main === "screen" && <button className="underline underline-offset-2" disabled={state === "starting"} onClick={() => onStart("camera")}>Use the webcam</button>}
               {!phone && screen && main !== "screen" && <button className="underline underline-offset-2" disabled={state === "starting"} onClick={() => onStart("screen")}>Share a window</button>}

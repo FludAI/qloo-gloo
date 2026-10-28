@@ -8,6 +8,7 @@ import { Rail } from "./Motion.jsx";
 // whole and can be dragged and zoomed so the word sits in the frame.
 // scan: null | "sweep" (reading) | { pieces: n } (found: one tick per piece drops under the frame)
 const VIDEO = { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } };
+const SLOW_MS = 12000; // a prompt the user can see is answered well before this
 const SCREEN = { video: { displaySurface: "window", frameRate: { ideal: 15 } }, audio: false, selfBrowserSurface: "exclude", surfaceSwitching: "include" };
 
 const Camera = forwardRef(function Camera({ onState, scan = null, children }, ref) {
@@ -39,6 +40,8 @@ const Camera = forwardRef(function Camera({ onState, scan = null, children }, re
     if (which === "screen" && !navigator.mediaDevices.getDisplayMedia) return set("unavailable", { reason: "This browser can't share a window.", source: which });
     stop(); setSource(which); setView({ x: 0, y: 0, z: 1 });
     set("starting", { source: which });
+    // The permission prompt can be hidden, dismissed, or never shown (an embedded browser): after a while the gate says so.
+    const slow = setTimeout(() => set("starting", { source: which, slow: true }), SLOW_MS);
     let mic = false, stream;
     try {
       if (which === "screen") {
@@ -50,8 +53,10 @@ const Camera = forwardRef(function Camera({ onState, scan = null, children }, re
         catch { stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false }); }
       }
     } catch (e) {
-      return set(e?.name === "NotAllowedError" || e?.name === "SecurityError" ? "denied" : "unavailable", { reason: e?.message, source: which });
+      clearTimeout(slow);
+      return set(e?.name === "NotAllowedError" || e?.name === "SecurityError" ? "denied" : "unavailable", { reason: e?.message, error: e?.name ?? "Error", source: which });
     }
+    clearTimeout(slow);
     stream.getAudioTracks().forEach((t) => t.stop());
     streamRef.current = stream;
     // A share the user ends from the browser's own bar takes the viewfinder with it.
