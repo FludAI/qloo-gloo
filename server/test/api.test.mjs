@@ -638,3 +638,91 @@ test("mcp: the stdio server lists its tools and answers a call, reading the toke
     assert.equal(e.isError, true);
   } finally { await client.close(); }
 });
+
+// ---- Gloo credits (decision 33): welcome, a drafted word costs one, reviewed words are free, referrals pay the referrer ----
+// A session that arrives from a given address (the referral soft signal hashes it; the test server sees everyone as localhost otherwise).
+const sessionAt = (ip) => {
+  let cookie = "";
+  const call = async (method, path, body) => {
+    const res = await fetch(`http://localhost:${PORT}${path}`, {
+      method, headers: { ...(cookie && { cookie }), "x-forwarded-for": ip, ...(body && { "content-type": "application/json" }) },
+      body: body && JSON.stringify(body),
+    });
+    const set = res.headers.get("set-cookie");
+    if (set) cookie = set.split(";")[0];
+    return { status: res.status, body: await res.json() };
+  };
+  call.sid = () => cookie.split("=")[1];
+  return call;
+};
+
+test("credits: a new visitor has 2 Gloo; a drafted word costs 1, a reviewed word 0, a repeat scan 0; an empty balance is a 402 and old lessons still open", async () => {
+  const s = session();
+  const first = (await s("GET", "/api/credits")).body;
+  assert.equal(first.balance, 2);
+  assert.match(first.referral.code, /^[a-zA-Z0-9]{10}$/);
+  assert.equal(first.referral.link, `http://localhost:${PORT}/?ref=${first.referral.code}`);
+  assert.match(first.policy, /first two words are on us/);
+  assert.equal(first.recent[0].event_type, "welcome_grant");
+  assert.equal((await s("GET", "/api/health")).body.credits.welcome, 2);
+  const reviewed = (await s("POST", "/api/glue", { text: "cholecystokinin", mode: "typed" })).body;
+  assert.equal(reviewed.created, false); assert.equal(reviewed.credits, undefined);
+  const drafted = (await s("POST", "/api/glue", { text: "glycolysis", mode: "typed" })).body;
+  assert.equal(drafted.created, true); assert.deepEqual(drafted.credits, { charged: true, balance: 1 });
+  const again = (await s("POST", "/api/glue", { text: "glycolysis", mode: "typed" })).body;
+  assert.equal(again.created, false); assert.equal(again.credits, undefined);
+  assert.equal((await s("GET", "/api/credits")).body.balance, 1);
+  assert.equal((await s("POST", "/api/glue", { text: "mitochondria", mode: "typed" })).body.credits.balance, 0);
+  const empty = await s("POST", "/api/glue", { text: "tachycardia", mode: "typed" });
+  assert.equal(empty.status, 402);
+  assert.deepEqual([empty.body.code, empty.body.error, empty.body.balance], ["GLOO_EMPTY", "Ready for another word? Invite a friend to earn more Gloo.", 0]);
+  assert.equal((await s("GET", "/api/terms/cholecystokinin")).status, 200);
+  assert.equal((await s("GET", `/api/terms/${drafted.term_id}`)).status, 200, "the words already drafted stay open");
+  assert.equal((await s("POST", "/api/glue", { text: "glycolysis", mode: "typed" })).status, 200, "and a repeat scan still costs nothing");
+  const ledger = (await s("GET", "/api/export")).body.credit_events;
+  assert.deepEqual(ledger.map((e) => [e.event_type, e.delta]), [["welcome_grant", 2], ["word_spend", -1], ["word_spend", -1]]);
+  assert.ok(ledger.every((e) => e.sid && e.account_id === null && /@credits-phase1-v1$/.test(e.reason_code)));
+  await s("DELETE", "/api/learner");
+  assert.equal((await s("GET", "/api/credits")).body.balance, 0, "deleting my data does not mint a second welcome");
+});
+
+test("credits: a referred friend's first completed word pays the referrer 3; self and duplicate claims are rejected; same-address claims are held for the owner", async () => {
+  const a = sessionAt("203.0.113.7"), b = sessionAt("198.51.100.2"), twin = sessionAt("203.0.113.7");
+  const { code } = (await a("GET", "/api/credits")).body.referral;
+  assert.equal((await a("POST", "/api/referrals/claim", { code })).body.reason, "self_referral");
+  assert.equal((await b("POST", "/api/referrals/claim", {})).status, 400);
+  assert.equal((await b("POST", "/api/referrals/claim", { code: "nope" })).body.reason, "unknown_code");
+  assert.deepEqual((await b("POST", "/api/referrals/claim", { code })).body, { recorded: true, status: "claimed", reason: null, flags: [] });
+  await b("POST", "/api/terms/cholecystokinin/first-attempt", { skipped: true });
+  assert.equal((await a("GET", "/api/credits")).body.balance, 2, "a first attempt alone is not a word experience");
+  await b("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: "chole", label: "Pepsi-Cola", connection: "Pepsi ≈ chole.", source: "pick", recognized: true });
+  const paid = (await a("GET", "/api/credits")).body;
+  assert.equal(paid.balance, 5); assert.equal(paid.referral.activated, 1);
+  assert.equal(paid.recent[0].event_type, "referral_reward"); assert.equal(paid.recent[0].delta, 3);
+  assert.equal((await b("GET", "/api/credits")).body.balance, 2, "the friend keeps the welcome");
+  assert.equal((await b("POST", "/api/referrals/claim", { code })).body.status, "activated", "a second claim changes nothing: the first attribution is reported as it stands");
+  await b("POST", "/api/learner/cues", { term_id: "cholecystokinin", role: "cysto", label: "Sister Act", connection: "Sister ≈ cysto.", source: "pick", recognized: true });
+  assert.equal((await a("GET", "/api/credits")).body.balance, 5, "one reward per friend");
+  // The twin arrives from the referrer's own address within the hour: the claim stands, the reward is held.
+  assert.deepEqual((await twin("POST", "/api/referrals/claim", { code })).body.flags, ["same_ip"]);
+  await twin("POST", "/api/terms/brier-score/first-attempt", { skipped: true });
+  await twin("POST", "/api/learner/cues", { term_id: "brier-score", role: "sound", label: "Breyers", connection: "Breyers ≈ Brier.", source: "pick", recognized: true });
+  assert.equal((await a("GET", "/api/credits")).body.balance, 5);
+  // The owner sees both sides of it and can release or reverse with a logged reason.
+  const o = owner();
+  assert.equal((await session()("GET", `/api/admin/credits/${a.sid()}`)).status, 401);
+  assert.equal((await o("GET", "/api/admin/credits/not-a-sid")).status, 400);
+  const view = (await o("GET", `/api/admin/credits/${a.sid()}`)).body;
+  assert.equal(view.balance, 5);
+  assert.deepEqual(view.referrals.map((r) => r.status), ["rejected", "activated", "held"]);
+  const held = view.referrals.find((r) => r.status === "held");
+  assert.equal(held.reason, "flag:same_ip");
+  assert.equal((await o("POST", `/api/admin/credits/${a.sid()}/adjust`, { delta: 3 })).status, 400, "a reason is required");
+  const rel = await o("POST", `/api/admin/credits/${a.sid()}/adjust`, { delta: 3, reason: "checked: a real friend on the same wifi", referral_id: held.id, idempotency_key: `release-${held.id}` }, { "x-gloo-editor": "loren" });
+  assert.equal(rel.status, 201); assert.equal(rel.body.balance, 8);
+  assert.equal(rel.body.event.reason_code, "adjustment:loren@credits-phase1-v1");
+  const dup = await o("POST", `/api/admin/credits/${a.sid()}/adjust`, { delta: 3, reason: "again", referral_id: held.id, idempotency_key: `release-${held.id}` });
+  assert.equal(dup.status, 200); assert.equal(dup.body.written, false); assert.equal(dup.body.balance, 8);
+  assert.equal((await o("GET", `/api/admin/credits/${a.sid()}`)).body.referrals.find((r) => r.id === held.id).status, "activated");
+  assert.equal((await o("GET", `/api/admin/credits/${twin.sid()}`)).body.referred_by.referrer_sid, a.sid());
+});

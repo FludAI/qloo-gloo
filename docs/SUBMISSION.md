@@ -67,6 +67,26 @@ fixtures (the mock ranks options in reverse alphabetical order).
 The cue agent below (Claude with Qloo tools) remains the opt-in, passcode-gated
 path for cues beyond the pick cards.
 
+## Gloo credits (phase 1)
+
+Your first two words are on us. A word the agent has to draft costs one Gloo;
+the reviewed lessons, your own earlier drafts, repeat scans, reviews and
+practice cost nothing. Invite a friend and get three Gloo when they try their
+first word (a first attempt and a favorite picked on one lesson), once per
+friend. When the balance is empty the camera still opens every word already
+learned, and asks you to invite a friend for the next one.
+
+Under it: an append-only ledger (`server/src/credits.mjs`, decision 33) with a
+reason and an idempotency key on every row, a failed draft refunded, one
+reward per friend and referrer, self and duplicate claims rejected, a same-
+address claim held for the owner, a per-referrer cap and a promotional budget,
+all configurable (`CREDITS_*`). The owner reads any session's ledger and
+adjusts it with a logged reason behind the admin token. Credits are tied to
+the session cookie today and carry across to an account at sign-in. Nothing
+about credits reaches Qloo. The mastery bonus from the brief is phase 2 and
+waits for learning evidence. The ledger lives in the instance's SQLite with
+the rest of learner data, so a redeploy resets balances for now.
+
 ## Request-to-result walkthrough
 _TODO after the live key works: paste one `describe` + `recommend` pair from
 the provenance panel, the agent's three proposals, and which one the learner

@@ -144,6 +144,14 @@ Environment variables (defaults shown):
 | `MEDIA_LOCAL` / `MEDIA_DIR` | unset | `1` forces the local folder (tests); `MEDIA_DIR` moves it |
 | `DEMO_PASSCODE` | unset | When set, camera, voice, the agent and drafting need it once per session. Off since Oct 27, 2026 (the daily caps are the traffic protection); to turn the gate back on, add `DEMO_PASSCODE=gloo-demo-passcode:latest` to `--set-secrets` and redeploy; the share link `?code=…` and the passcode sheet still work |
 | `ADMIN_TOKEN` | unset | Owner token for `/api/admin/lessons` and `/edit` (header `x-gloo-admin`); unset = owner API off |
+| `CREDITS_WELCOME` | `2` | Gloo on first contact (decision 33) |
+| `CREDITS_WORD_COST` | `1` | Gloo per word the agent drafts (refunded if the draft fails) |
+| `CREDITS_REFERRAL` | `3` | Gloo to the referrer when a referred friend completes a first word |
+| `CREDITS_REFERRAL_CAP` | `10` | Paid referrals per referrer; past it rewards are held for the owner |
+| `CREDITS_PROMO_BUDGET` | `3000` | Welcome plus referral Gloo across all learners, ever; past it welcomes stop and rewards are held |
+| `CREDITS_SAME_IP_MINUTES` | `60` | A claim from the referrer's own address within this window is held, not paid |
+| `CREDITS_SECRET` | `ADMIN_TOKEN` | Keys referral codes and the address hash; set it if the owner token ever rotates |
+| `PUBLIC_URL` | request origin | Base of the referral link (`https://gloo.news`) |
 
 Set a budget alert on the Anthropic account too. Qloo hackathon keys expire
 after the event; after that the demo shows "Qloo: key missing" and keeps the

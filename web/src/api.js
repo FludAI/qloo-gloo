@@ -37,6 +37,8 @@ export const api = {
   attempt: (body) => post("/api/attempts", body),
   progress: (termId) => get(`/api/progress/${termId}`),
   sayVerify: (body) => post("/api/say/verify", body),
+  credits: () => get("/api/credits"),
+  claimReferral: (code) => post("/api/referrals/claim", { code }),
   exportData: () => get("/api/export"),
   deleteData: () => req("DELETE", "/api/learner"),
 };

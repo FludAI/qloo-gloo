@@ -9,6 +9,7 @@ import { useHoldToTalk } from "./lib/talk.js";
 import { sfx, warmAudio } from "./lib/sfx.js";
 import { configureSpeech, lastSpoken, speechMode, unlockAudio } from "./lib/speak.js";
 import { CameraIcon, CloseIcon, InfoIcon, MicIcon, PictureIcon } from "./components/Icons.jsx";
+import { Balance, InviteButton } from "./components/Invite.jsx";
 import { imageFrom, inAppBrowser, isIOS, isPhone } from "./lib/device.js";
 
 // Gloo is a camera. Camera and mic on (phone or glasses), or a shared window on a desktop, or a picture of
@@ -30,31 +31,40 @@ export default function App() {
   const [sheet, setSheet] = useState(null); // { termId, glued }
   const [info, setInfo] = useState(false);
   const [pass, setPass] = useState(null); // { retry }
+  const [credits, setCredits] = useState(null); // Gloo balance and referral link
+  const [empty, setEmpty] = useState(""); // the server's line when a new word would cost more Gloo than there is
   const toastTimer = useRef(null);
 
   const say = useCallback((msg) => { setToast(msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(""), 3500); }, []);
   const loadHealth = useCallback(() => api.health().then((h) => { configureSpeech(h); setHealth(h); }).catch(() => setHealth({ offline: true })), []);
   const loadTerms = useCallback(() => api.terms().then(setTerms).catch(() => {}), []);
+  const loadCredits = useCallback(() => api.credits().then(setCredits).catch(() => {}), []);
   useEffect(() => {
-    // A shared link can carry the passcode (?code=...), so nobody has to type it.
-    const code = new URLSearchParams(location.search).get("code");
-    const boot = code ? api.unlock(code).catch(() => {}).then(() => history.replaceState(null, "", location.pathname)) : Promise.resolve();
-    boot.then(() => { loadHealth(); loadTerms(); });
-  }, [loadHealth, loadTerms]);
+    // A shared link can carry the passcode (?code=...), so nobody has to type it, or a friend's referral (?ref=...).
+    const params = new URLSearchParams(location.search);
+    const code = params.get("code"), ref = params.get("ref");
+    const boot = Promise.resolve()
+      .then(() => (code ? api.unlock(code).catch(() => {}) : null))
+      .then(() => (ref ? api.claimReferral(ref).catch(() => {}) : null))
+      .then(() => { if (code || ref) history.replaceState(null, "", location.pathname); });
+    boot.then(() => { loadHealth(); loadTerms(); loadCredits(); });
+  }, [loadHealth, loadTerms, loadCredits]);
 
   // Every metered action goes through here: a passcode challenge replays the action once unlocked.
   const guard = useCallback(async (fn) => {
     try { await fn(); }
     catch (e) {
       if (e?.code === "PASSCODE_REQUIRED") setPass({ retry: fn });
+      else if (e?.code === "GLOO_EMPTY") { setEmpty(e.message); loadCredits(); }
       else say(e?.message ?? "Something went wrong.");
     }
-  }, [say]);
+  }, [say, loadCredits]);
 
   // Scan: the sweep runs while the server reads; when the word is known, one tick per piece drops
   // under the frame, the frame locks, and the lesson opens.
   const onGlued = async (result) => {
     await loadTerms();
+    if (result.credits) loadCredits();
     let pieces = 0;
     try { pieces = (await api.term(result.term_id)).pieces?.length ?? 0; } catch { /* lesson still opens */ }
     if (pieces) { setScan({ pieces }); sfx("lock", 120 + pieces * 150 + 260); await new Promise((r) => setTimeout(r, 120 + pieces * 150 + 520)); }
@@ -102,6 +112,7 @@ export default function App() {
         <div className="safe-top absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4">
           <Logo />
           <div className="flex items-center gap-2">
+            <Balance credits={credits} />
             <button className="round !h-9 !w-9" aria-label="About this demo" onClick={() => setInfo(true)}><InfoIcon /></button>
           </div>
         </div>
@@ -134,9 +145,20 @@ export default function App() {
         </>)}
 
         {(toast || (talk.error && !busy)) && <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6" style={{ bottom: "calc(12rem + env(safe-area-inset-bottom))" }}><span className="toast">{toast || talk.error}</span></div>}
+        {empty && (
+          <div className="absolute inset-x-0 z-20 flex justify-center px-6" style={{ bottom: "calc(12rem + env(safe-area-inset-bottom))" }}>
+            <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl bg-black/75 px-5 py-4 text-center backdrop-blur" role="alert">
+              <p className="text-base leading-snug">{empty}</p>
+              <div className="flex items-center gap-2">
+                <InviteButton credits={credits} say={(m) => { setEmpty(""); say(m); }} className="btn-light !py-2" />
+                <button className="btn-ghost" onClick={() => setEmpty("")}>Not now</button>
+              </div>
+            </div>
+          </div>
+        )}
       </Camera>
 
-      {sheet && <Flow termId={sheet.termId} glued={sheet.glued} health={health} guard={guard}
+      {sheet && <Flow termId={sheet.termId} glued={sheet.glued} health={health} guard={guard} credits={credits} onCredits={loadCredits} say={say}
         onClose={() => { setSheet(null); loadTerms(); }} onRegue={(body) => glue(body, "Gluing…")} />}
       {info && <InfoSheet health={health} micGranted={micGranted} onClose={() => setInfo(false)} />}
       {pass && <Passcode onClose={() => setPass(null)} onUnlocked={async () => { const retry = pass.retry; setPass(null); await loadHealth(); if (retry) guard(retry); }} />}

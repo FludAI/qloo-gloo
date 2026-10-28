@@ -8,13 +8,14 @@ import { pawPlan } from "../lib/paw.js";
 import { speak, hush } from "../lib/speak.js";
 import { sfx } from "../lib/sfx.js";
 import { CloseIcon } from "./Icons.jsx";
+import { InviteButton } from "./Invite.jsx";
 
 // After capture: one card at a time over the camera. Say it → one picture per sound piece → the whole
 // word from their pictures → practice → progress. Pieces before meaning: the sounds stick first.
 const HOW = { typed: "typed", voice: "heard", ocr: "read from a photo", camera: "read from the camera" };
 const bareTitle = (term) => term.title.replace(/\s*\(.*?\)\s*/g, "").trim();
 
-export default function Flow({ termId, glued, health, guard, onClose, onRegue }) {
+export default function Flow({ termId, glued, health, guard, credits, onCredits, say, onClose, onRegue }) {
   const [term, setTerm] = useState(null);
   const [progress, setProgress] = useState(null);
   const [chosen, setChosen] = useState([]);
@@ -36,6 +37,7 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
     const prev = pickFor(role.id);
     if (prev) await api.removeCue(prev.id);
     setChosen(await api.addCue({ term_id: term.id, recognized: true, role: role.id, label: o.name, connection: o.connection, source: "pick", qloo_entity_id: null, qloo_entity_type: o.qloo?.type ?? null }));
+    onCredits?.(); // a first pick can complete a referred friend's first word
   };
   const close = () => { hush(); onClose(); };
 
@@ -54,7 +56,7 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
         {term?.provisional && <p className="mt-3 rounded-xl bg-gloo/20 px-3 py-2 text-xs text-paper/80">Provisional draft by the agent, not reviewed.</p>}
         {err && <p className="mt-3 text-sm text-red-300">{err}</p>}
 
-        {term?.locked && <FirstAttempt term={term} health={health} guard={guard} onSaved={() => { load(); refresh(); }} />}
+        {term?.locked && <FirstAttempt term={term} health={health} guard={guard} onSaved={() => { load(); refresh(); onCredits?.(); }} />}
 
         {term && !term.locked && (<>
           <Dots steps={steps} at={step} onPick={setStep} />
@@ -69,6 +71,12 @@ export default function Flow({ termId, glued, health, guard, onClose, onRegue })
           </>)}
           {current === "progress" && (<>
             <Skills progress={progress} chosen={chosen} term={term} roles={pickRoles} />
+            {credits && (
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-paper/60"><img src="/brand/gloo-token.svg" alt="" className="mr-1 inline h-4 w-4 align-[-3px]" />{credits.policy}</p>
+                <InviteButton credits={credits} say={say} className="btn-ghost shrink-0" />
+              </div>
+            )}
             <div className="mt-5 flex gap-2">
               <button className="btn-light flex-1" onClick={close}>Gloo another word</button>
               <button className="btn-ghost" onClick={() => setStep(steps.indexOf("practice"))}>Practice more</button>
