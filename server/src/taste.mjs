@@ -181,11 +181,16 @@ export async function tailorRole(role, signals, call, { budget = remaining, grou
 
 // The whole term as this learner should see it, and a record of what each card offered (so a later pick can say
 // whether it came from a tailored card: index.mjs reads pick_offers when the cue is saved).
+// `skip` names the roles this learner has already picked on this term: those cards are returned as they are, with
+// no call and their stored offer untouched, so a card never moves under a reveal and no credit re-ranks a decision made.
+// The client reloads the lesson after each pick, so the cards still ahead are ranked with the pick just made.
 export async function tailorTerm(term, sid, call, opts = {}) {
   const signals = opts.signals ?? signalsFor(sid);
+  const skip = opts.skip ?? new Set();
   const roles = [];
   for (const role of term.roles ?? []) {
     if (!role.pick?.options?.length) { roles.push(role); continue; }
+    if (skip.has(role.id)) { roles.push({ ...role, pick: { ...role.pick, tailoring: { source: "kept", reason: "already picked" } } }); continue; }
     const t = await tailorRole(role, signals, call, opts);
     roles.push(t);
     q.putOffer.run(sid, term.id, role.id, t.pick.tailoring.source === "taste" ? 1 : 0,
