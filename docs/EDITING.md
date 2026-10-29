@@ -37,8 +37,8 @@ number or choice.
 ## Ambient mode
 
 `/edit` opens in its ambient mode once the token is in: the lesson as a grid of
-fields under a camera (the design study in `web/public/design/ambient/`, built
-in `web/src/edit/Ambient.jsx` with its pure parts in `web/src/edit/ambient/`).
+fields under a camera (built in `web/src/edit/Ambient.jsx` with its pure parts
+in `web/src/edit/ambient/`).
 The grid shows the word (title, say, summary), one column per piece (part,
 sounds-like, meaning, pick question, four option names) and one per practice
 prompt (question, hint, answer). The camera opens on the whole map, waits a

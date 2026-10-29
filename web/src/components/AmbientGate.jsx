@@ -5,7 +5,7 @@ import { reducedMotion } from "../lib/sfx.js";
 
 // The gate, alive: behind the copy, the lesson loop plays on its own (a word on paper, the frame,
 // the sweep, a tick per piece, the pieces drifting apart, their hooks rising, the meaning), then
-// fades and plays again. Lifted from the design tool's ambient landing study (web/public/design/landing).
+// fades and plays again.
 const PIECES = [
   { part: "chole", sound: "≈ cola" },
   { part: "cysto", sound: "≈ sister" },

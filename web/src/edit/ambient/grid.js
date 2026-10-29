@@ -6,7 +6,7 @@
 // Field keys: "w:title" | "w:say" | "w:summary"
 //             "r:<roleId>:part|sounds|meaning|question|opt0..opt3"
 //             "p:<promptId>:question|hint|answer"
-// Layout numbers are lifted from web/public/design/ambient/editor-logic.js.
+// Layout numbers for the grid.
 
 export const COLW = 420;
 export const GRID = { cols: 3, rowH: 500 };

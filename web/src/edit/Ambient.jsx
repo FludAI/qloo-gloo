@@ -8,7 +8,7 @@ import { parseCommand, tagForInstruction } from "./ambient/grammar.js";
 import { KEEP_DELTA, NEXT_DELTA, learn, loadTaste, rank, saveTaste, tagsForProposal, top } from "./ambient/taste.js";
 import { DUR, EASE, camTransform, flightTo } from "./ambient/camera.js";
 
-// The ambient editor (design study v2, web/public/design/ambient/): the lesson as a grid of fields under a
+// The ambient editor: the lesson as a grid of fields under a
 // camera. It opens on the whole map, flies to the next field worth changing and shows one proposal in focus.
 // keep / next / back / undo / map by voice, swipe, keys or taps; typing is the owner's fallback. Nothing is
 // spoken: this is the owner working. Every keep is one PATCH (or one accept of a pending proposal) and
