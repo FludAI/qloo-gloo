@@ -122,13 +122,13 @@ on a hosted demo. The reviewed lessons stay open.
 | --- | --- |
 | Both sample lessons, first attempt, typed map, practice, per-skill progress | Implemented |
 | Deterministic scoring, hint independence, idempotent attempts, session isolation, export/delete | Implemented, tested |
-| Qloo path through `qloo mcp` | Implemented; reached the hackathon API (401 with a test key). Live results pending key |
-| Cue agent (Claude + Qloo tools, ID verification) | Implemented; loop tested against a fake provider. Live run pending key |
+| Qloo path through `qloo mcp` | Live: picks resolved with `describe`, pick cards ranked with `rank` from the second pick on |
+| Cue agent (Claude + Qloo tools, ID verification) | Live over the API (`POST /api/cues/agent`); the camera build has no screen for it |
 | Spaced review schedule | Implemented (pilot policy; simulated time is not retention evidence) |
-| Camera-first capture: framed crop read on the server, hold-to-talk voice (Google Speech-to-Text, browser fallback), typed | Implemented; API paths tested. Live camera and mic need a real phone browser |
-| Passcode gate for metered features on the hosted demo | Implemented, tested |
+| Camera-first capture: framed crop read on the server, hold-to-talk voice (Google Speech-to-Text, browser fallback), screen share, picture upload | Live on phones and laptops |
+| Passcode gate for metered features on the hosted demo | Implemented, tested; off for the hackathon demo |
 | Word resolution (exact / spelling / sound-alike / dictionary, LLM backup) | Implemented, tested |
-| Provisional lessons for new words | Implemented; drafting tested against a fake provider. Live drafting pending key |
+| Provisional lessons for new words | Live: drafted by the agent, labeled provisional, spoken with the same voice |
 | Pronunciation scoring, glasses input, encounter detection, rewards | Not in this build; shown as unavailable |
 
 Design decisions, including where this build departs from the Gloo spec, are in

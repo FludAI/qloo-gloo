@@ -100,7 +100,7 @@ Gloo is a camera overlay, like a lens for words. No typing, no reading, no forms
 
 ## How I built it
 
-- **Qloo, the taste behind the connections.** `describe` resolves each pick's public entity once and keeps the ID in my store. `rank` reorders the next cards with the learner's picks as signals, one call per piece and entity type, cached a week. Nothing is written to Qloo and nothing personal reaches it; a signal is a public entity ID. A cue agent, Claude with Qloo tools behind MCP, proposes connections beyond the cards, keeping only IDs Qloo returned.
+- **Qloo, the taste behind the connections.** `describe` resolves each pick's public entity once and keeps the ID in my store. `rank` reorders the next cards with the learner's picks as signals, one call per piece and entity type, cached a week. Nothing is written to Qloo and nothing personal reaches it; a signal is a public entity ID. A cue agent, Claude with Qloo tools behind MCP, proposes connections beyond the cards over the API, keeping only IDs Qloo returned; the camera build keeps it off screen.
 
   ![The lesson loop: word, pieces, picks, Qloo rank, voice and paw, practice](https://gloo.news/devpost/lesson-loop.svg)
 
