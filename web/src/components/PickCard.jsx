@@ -64,7 +64,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
       <section className="mt-3">
         <div className="stage">
           <div className="grid h-full grid-cols-2 gap-3">
-            <div className={a ? "rise" : ""}><Picture src={art} name={reveal.label} big custom={reveal.custom} /></div>
+            <div className={a ? "rise" : ""}><Picture src={art} name={reveal.label} big custom={reveal.custom} whole={Boolean(reveal.option?.image)} /></div>
             <div className="flex flex-col items-center justify-center text-center">
               <div className={`font-display text-[2.6rem] leading-none text-gloo ${a ? "rise" : ""}`} style={a ? { animationDelay: ".7s" } : undefined}>{role.part}</div>
               <SpokenPaw term={term} piece={role} size={40} className={`mt-1 ${a ? "fade-in" : ""}`} />
@@ -89,7 +89,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
         <div className="grid h-full grid-cols-2 gap-3">
           {role.pick.options.slice(0, 4).map((o) => (
             <button key={o.name} ref={(n) => { tiles.current[o.name] = n; }} className={`tile-img ${picking && picking !== o.name ? "fall-back" : ""} ${o.taste != null ? "ring-1 ring-gloo/60" : ""}`} disabled={!!picking} onClick={() => choose(o.name, o)} aria-label={o.name} data-taste={o.taste ?? undefined}>
-              <Picture src={o.image ?? (o.wiki ? `/api/art?t=${encodeURIComponent(o.wiki)}` : null)} name={o.name} />
+              <Picture src={o.image ?? (o.wiki ? `/api/art?t=${encodeURIComponent(o.wiki)}` : null)} name={o.name} whole={Boolean(o.image)} />
               <span className="tile-cap">{o.name}{o.link && <span className="ml-1 font-mono text-[9px] opacity-70">ad</span>}</span>
             </button>
           ))}
@@ -105,7 +105,7 @@ export default function PickCard({ term, role, mine, health, guard, onPicked, on
   );
 }
 
-function Picture({ src, name, big = false, custom = false }) {
+function Picture({ src, name, big = false, custom = false, whole = false }) {
   const [failed, setFailed] = useState(false);
   if (custom) {
     // An off-list favorite: a waveform tile for what they said.
@@ -119,5 +119,7 @@ function Picture({ src, name, big = false, custom = false }) {
   if (!src || failed) {
     return <div className={`flex h-full w-full items-center justify-center rounded-2xl bg-paper/10 px-2 text-center ${big ? "font-display text-3xl" : "text-base font-medium"}`}>{name}</div>;
   }
-  return <img src={src} alt={name} className="h-full w-full rounded-2xl object-cover" loading="lazy" onError={() => setFailed(true)} />;
+  // A product shot (an affiliate picture on white) is shown whole on a white tile, so its label is never cropped
+  // and two packshots line up; wiki art fills the tile.
+  return <img src={src} alt={name} className={`h-full w-full rounded-2xl ${whole ? "bg-white object-contain p-1" : "object-cover"}`} loading="lazy" onError={() => setFailed(true)} />;
 }
