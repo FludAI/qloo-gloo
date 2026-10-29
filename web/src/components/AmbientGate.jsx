@@ -13,6 +13,7 @@ const PIECES = [
   { part: "-in", sound: null },
 ];
 const MEANING = "the hormone that makes the bile sac move";
+const DEMO_WORD = "cholecystokinin";  // the lesson the loop plays; a tap on the stage opens it
 // The four corners of the frame, as the camera's reticle draws them.
 const CORNERS = [
   ["tl", { top: -2, left: -2, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 14 }],
@@ -22,7 +23,7 @@ const CORNERS = [
 ];
 const EASE = "cubic-bezier(.16,1,.3,1)", SNAP = "cubic-bezier(.3,1.5,.5,1)";
 
-export default function AmbientGate({ state, source, access = {}, paused = false, onStart, onPick }) {
+export default function AmbientGate({ state, source, access = {}, paused = false, onStart, onPick, onOpen }) {
   const root = useRef(null);
   const anims = useRef([]);      // the stage's running animations
   const timer = useRef(null);    // the loop's restart
@@ -102,8 +103,8 @@ export default function AmbientGate({ state, source, access = {}, paused = false
     <div ref={root} className="absolute inset-0 overflow-hidden transition-opacity duration-500" style={{ background: "radial-gradient(120% 90% at 50% 40%, #16140f 0%, #000 70%)", opacity: paused ? 0.18 : 1 }}>
       <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.2) 40%, rgba(0,0,0,.65))" }} />
       <div className="relative flex h-full flex-wrap-reverse content-center items-center justify-center gap-x-10 gap-y-2 px-7 pb-8 pt-16 sm:pb-12 sm:pt-20">
-        {/* The demo stage */}
-        <div className="relative flex h-[330px] w-full max-w-[640px] flex-[1_1_520px] items-center justify-center sm:h-[380px]" aria-hidden>
+        {/* The demo stage: the loop plays the CCK lesson, and a tap on it opens that lesson for real */}
+        <button type="button" className="relative flex h-[330px] w-full max-w-[640px] flex-[1_1_520px] cursor-pointer items-center justify-center rounded-2xl text-left sm:h-[380px]" aria-label="Open the cholecystokinin lesson" title="Open this lesson" onClick={() => onOpen?.(DEMO_WORD)}>
           <div data-a="paper" className="absolute left-[8%] right-[8%] top-[90px] h-[170px] rounded-md opacity-0" style={{ background: "#e8e0cf", transform: "rotate(-1.2deg)" }} />
           <div data-a="ret" className="absolute left-[5%] right-[5%] top-[76px] h-[198px] opacity-0">
             {CORNERS.map(([k, st]) => <span key={k} className="absolute h-[30px] w-[30px] border-paper" style={st} />)}
@@ -119,7 +120,7 @@ export default function AmbientGate({ state, source, access = {}, paused = false
             ))}
           </div>
           <div data-a="mean" className="absolute inset-x-0 top-[300px] text-center sm:top-[340px] text-[17px] font-medium leading-snug text-paper opacity-0">{MEANING}</div>
-        </div>
+        </button>
 
         {/* The copy and the one button */}
         <div className="flex w-full max-w-[460px] flex-[1_1_380px] flex-col items-center gap-5 text-center">
