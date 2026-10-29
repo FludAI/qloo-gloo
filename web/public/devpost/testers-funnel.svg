@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="360" viewBox="0 0 800 360" role="img" aria-label="Where 12 sessions stopped: visited 12, gate 2, read 2, lesson 2, pick 1, practice 0, correct 0">
+<rect width="800" height="360" rx="14" fill="#000"/>
+<text x="24" y="40" font-family="Georgia, 'Times New Roman', serif" font-size="24" fill="#f6f1e7">Where 12 sessions stopped</text>
+<text x="24" y="62" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="rgba(246,241,231,.58)">The 48 hours to Oct 29, 04:46 UTC. The live ledger had been reset by a deploy about three hours earlier.</text>
+<text x="176" y="102" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#f6f1e7">visited</text>
+<text x="176" y="117" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">opened the app</text>
+<path d="M190 92h536a4 4 0 0 1 4 4v8a4 4 0 0 1 -4 4h-536z" fill="#f1b33a"/>
+<text x="740" y="104.5" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#f6f1e7">12</text>
+<text x="176" y="138" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#f6f1e7">gate</text>
+<text x="176" y="153" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">camera or screen live</text>
+<path d="M190 128h86a4 4 0 0 1 4 4v8a4 4 0 0 1 -4 4h-86z" fill="#f1b33a"/>
+<text x="290" y="140.5" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#f6f1e7">2</text>
+<text x="176" y="174" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#f6f1e7">read</text>
+<text x="176" y="189" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">a word read off the frame</text>
+<path d="M190 164h86a4 4 0 0 1 4 4v8a4 4 0 0 1 -4 4h-86z" fill="#f1b33a"/>
+<text x="290" y="176.5" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#f6f1e7">2</text>
+<text x="176" y="210" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#f6f1e7">lesson</text>
+<text x="176" y="225" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">said it first</text>
+<path d="M190 200h86a4 4 0 0 1 4 4v8a4 4 0 0 1 -4 4h-86z" fill="#f1b33a"/>
+<text x="290" y="212.5" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#f6f1e7">2</text>
+<text x="176" y="246" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#f6f1e7">pick</text>
+<text x="176" y="261" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">chose a connection</text>
+<path d="M190 236h41a4 4 0 0 1 4 4v8a4 4 0 0 1 -4 4h-41z" fill="#f1b33a"/>
+<text x="245" y="248.5" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#f6f1e7">1</text>
+<text x="176" y="282" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#f6f1e7">practice</text>
+<text x="176" y="297" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">answered a question</text>
+<rect x="190" y="272" width="2" height="16" fill="rgba(246,241,231,.18)"/>
+<text x="200" y="284.5" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#f6f1e7">0</text>
+<text x="176" y="318" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600" fill="#f6f1e7">correct</text>
+<text x="176" y="333" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">got one right</text>
+<rect x="190" y="308" width="2" height="16" fill="rgba(246,241,231,.18)"/>
+<text x="200" y="320.5" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#f6f1e7">0</text>
+<line x1="190" y1="84" x2="190" y2="334" stroke="rgba(246,241,231,.18)" stroke-width="1"/>
+<text x="776" y="344" text-anchor="end" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="rgba(246,241,231,.58)">A session is a cookie, not a person. The report says where a session stopped, never who it was.</text>
+</svg>

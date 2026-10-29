@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="330" viewBox="0 0 800 330" role="img" aria-label="The lesson loop: word, pieces, picks, Qloo rank, voice and paw, practice, then the next word ranked for your taste">
+<rect width="800" height="330" rx="14" fill="#000"/>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f1b33a"/></marker><marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2bb8a3"/></marker></defs>
+<text x="24" y="46" font-family="Georgia, 'Times New Roman', serif" font-size="24" fill="#f6f1e7">The lesson loop</text>
+<text x="24" y="70" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="rgba(246,241,231,.58)">What you love gives you a way in. What you learn changes what you can love.</text>
+<rect x="15" y="112" width="110" height="90" rx="12" fill="#101010" stroke="rgba(246,241,231,.18)" stroke-width="1"/>
+<text x="70" y="154" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#f1b33a">Word</text>
+<text x="70" y="178" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">camera, “Gloo it”</text>
+<line x1="128" y1="157" x2="144" y2="157" stroke="#f1b33a" stroke-width="2" marker-end="url(#a)"/>
+<rect x="147" y="112" width="110" height="90" rx="12" fill="#101010" stroke="rgba(246,241,231,.18)" stroke-width="1"/>
+<text x="202" y="154" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#f1b33a">Pieces</text>
+<text x="202" y="178" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">chole · cysto · kin</text>
+<line x1="260" y1="157" x2="276" y2="157" stroke="#f1b33a" stroke-width="2" marker-end="url(#a)"/>
+<rect x="279" y="112" width="110" height="90" rx="12" fill="#101010" stroke="rgba(246,241,231,.18)" stroke-width="1"/>
+<text x="334" y="154" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#f1b33a">Picks</text>
+<text x="334" y="178" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">which cola is yours?</text>
+<line x1="392" y1="157" x2="408" y2="157" stroke="#f1b33a" stroke-width="2" marker-end="url(#a)"/>
+<rect x="411" y="112" width="110" height="90" rx="12" fill="#101010" stroke="#f1b33a" stroke-width="1.5"/>
+<text x="466" y="154" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#f1b33a">Qloo rank</text>
+<text x="466" y="178" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">your taste first</text>
+<line x1="524" y1="157" x2="540" y2="157" stroke="#f1b33a" stroke-width="2" marker-end="url(#a)"/>
+<rect x="543" y="112" width="110" height="90" rx="12" fill="#101010" stroke="rgba(246,241,231,.18)" stroke-width="1"/>
+<text x="598" y="154" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#f1b33a">Voice + paw</text>
+<text x="598" y="178" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">a toe per syllable</text>
+<line x1="656" y1="157" x2="672" y2="157" stroke="#f1b33a" stroke-width="2" marker-end="url(#a)"/>
+<rect x="675" y="112" width="110" height="90" rx="12" fill="#101010" stroke="rgba(246,241,231,.18)" stroke-width="1"/>
+<text x="730" y="154" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#f1b33a">Practice</text>
+<text x="730" y="178" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="rgba(246,241,231,.58)">hooks hidden, scored</text>
+<path d="M730 206 C 730 272, 70 272, 70 208" fill="none" stroke="#2bb8a3" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#s)"/>
+<rect x="185" y="238" width="430" height="24" rx="12" fill="#000"/>
+<text x="400" y="254" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#2bb8a3">next word: from your second pick on, the cards come ranked for your taste</text>
+<text x="400" y="314" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="rgba(246,241,231,.58)">A pick is a public entity ID, sent to Qloo as a signal. Nothing personal leaves the app.</text>
+</svg>

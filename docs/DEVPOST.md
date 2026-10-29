@@ -59,17 +59,61 @@ The hard words that once kept you outside a subject become keys to understanding
 Gloo is a camera overlay, like a lens for words. No typing, no reading, no forms.
 
 1. **Point your camera** at a word on a page or a screen and say "Gloo it."
+
+   ![A shared window under the reticle, with the word dragged into the frame](https://gloo.news/devpost/02-frame-the-word-on-screen.jpg)
+
+   *A shared window under the reticle. Drag the word into the frame, then tap or hold the mic and say it.*
+
 2. **Say it first.** Your attempt is scored by sound, piece by piece, in the background. A guess is fine.
+
+   ![The sweep while the server reads the word](https://gloo.news/devpost/03-reading-sweep.jpg)
+
+   *The sweep while the server reads the word off the frame. Your first attempt is scored against the pieces it finds.*
+
 3. **Meet the pieces.** Each sound piece is a card of four pictures from the culture you love, and all four carry the sound. "Which cola is yours?" is *chole*. Any pick is right, and your pick becomes the connection.
+
+   ![The chole pick card: four colas, all carrying the sound](https://gloo.news/devpost/04-pick-your-cola.jpg)
+
+   *The chole card: four colas, all carrying the sound. Any pick is right.*
+
 4. **Hear it stick.** One voice says every piece from stored pronunciation, and the gecko paw lights a toe per syllable in time with the voice. Say it back and the toes light from your own voice, then turn gold for the pieces you got.
+
+   ![The pieces assembled, with the gecko paw below](https://gloo.news/devpost/06-pieces-together-paw.jpg)
+
+   *The pieces together, the gecko paw below. A toe lights per syllable as the voice says the word.*
+
 5. **The culture learns you.** From your second pick on, Qloo ranks the next cards for your taste. The pictures stay the ones that carry the sound; the ones you are likeliest to love come first. Your progress card says "3 of your 4 hooks came from your taste."
+
+   ![The review grid and the hooks that came from your taste](https://gloo.news/devpost/08-progress-taste.jpg)
+
+   *The review grid, and how many of your hooks came from your taste.*
+
 6. **Practice without the hooks.** One spoken question at a time, scored on the server, so an unfamiliar word becomes an unforgettable one on its own.
+
+   ![One spoken question, hooks hidden](https://gloo.news/devpost/07-practice.jpg)
+
+   *One spoken question at a time, hooks hidden, scored on the server.*
 
 ## How I built it
 
 - **Qloo, the taste behind the connections.** `describe` resolves each pick's public entity once and keeps the ID in my store. `rank` reorders the next cards with the learner's picks as signals, one call per piece and entity type, cached a week. Nothing is written to Qloo and nothing personal reaches it; a signal is a public entity ID. A cue agent, Claude with Qloo tools behind MCP, proposes connections beyond the cards, keeping only IDs Qloo returned.
+
+  ![The lesson loop: word, pieces, picks, Qloo rank, voice and paw, practice](https://gloo.news/devpost/lesson-loop.svg)
+
+  *The loop. A pick becomes a signal, and from the second pick on, Qloo ranks the next cards for the learner.*
+
 - **The voice.** Google Text-to-Speech with SSML phonemes from IPA stored per piece, so *chole* is said as its hook, cola, every time, and SSML marks give the per-syllable timing that lights the paw. Google Speech-to-Text hears answers with the prompt's expected words as context, so "bile" is heard as bile and not "Bayou."
+
+  ![The syllable paw with four of five toes lit](https://gloo.news/devpost/syllable-paw.svg)
+
+  *The syllable paw: SSML marks time the toes to the voice, and the learner’s own voice lights them back.*
+
 - **Lessons as data.** Every lesson is versioned JSON in a bucket, with an owner console that works over the camera, a reviewer agent that proposes fixes, and an MCP server so other agents can edit and test lessons.
+
+  ![A provisional lesson drafted on the fly for Gallbladder](https://gloo.news/devpost/09-agent-drafts-any-word.jpg)
+
+  *A provisional lesson drafted on the fly for “Gallbladder”, labeled not reviewed until the owner publishes it.*
+
 - **The stack.** React and Vite on the front, Express on Node 22 with SQLite as a hot cache, Cloud Run with one warm instance, and Cloud Storage for clips, pictures and lessons.
 
 ## Challenges I ran into
@@ -81,6 +125,10 @@ Gloo is a camera overlay, like a lens for words. No typing, no reading, no forms
 - **Credits are finite.** I added a global daily cap, a reserve, a week-long cache, and no call before the second pick.
 - **iPhone browser quirks followed the learner.** In my testing, the camera prompt could vanish inside an in-app browser, a per-site Deny could prevent it from appearing again, and the browser sometimes dropped the clip inside my logo's SVG, turning the teal paw all gold. The gate now identifies an in-app browser, times out a silent prompt with a next step, and shows the iPhone-specific fix on a refusal. I made the logo inline so its clip holds. A laptop's webcam faces the wrong way, so a desktop shares its screen instead.
 
+  ![The gate, with the lesson loop playing behind the copy](https://gloo.news/devpost/01-gate-living-demo.jpg)
+
+  *The gate: it names an in-app browser, times out a silent prompt, and offers a desktop its screen instead of a webcam.*
+
 ## What I learned
 
 A word alone gave me little useful information about taste. A learner, a word and their picks gave me something I could use.
@@ -90,6 +138,10 @@ But learning your preferences is only half the loop. Understanding something new
 That understanding can also change what you contribute to other people. The language of a domain connects you to its work and its people. Those relationships expose you to new interests and problems, giving you reasons to learn again.
 
 My current loop uses picks to personalize the cards. The next question is whether the understanding those cards support changes what learners choose to explore afterward. Recognition, preference and recall need their own evidence.
+
+![Where 12 sessions stopped in 48 hours](https://gloo.news/devpost/testers-funnel.svg)
+
+*Where 12 sessions stopped in the 48 hours to Oct 29, from the testers report. The live ledger had been reset by a deploy three hours earlier.*
 
 Stickiness is a property of connections, and learning can change both ends of a connection.
 
