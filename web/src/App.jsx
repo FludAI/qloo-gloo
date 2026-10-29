@@ -94,7 +94,7 @@ export default function App() {
     api.beacon({ event: "mic", state, error: state === "blocked" ? "NotAllowedError" : null, platform: isIOS() ? "ios" : isPhone() ? "android" : "desktop" });
   }, []);
   const talk = useHoldToTalk({
-    stt: health?.stt, onMic,
+    stt: health?.stt, where: "gate", onMic,
     onPcm: ({ pcm16 }) => glue({ mode: "voice", pcm16, ...(frame() ?? {}) }, "Listening…"),
     onText: ({ transcript }) => glue({ mode: "voice", text: transcript, ...(frame() ?? {}) }, "Listening…"),
   });

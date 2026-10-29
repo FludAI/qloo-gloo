@@ -435,6 +435,21 @@ test("a gate beacon is stored per session, and the owner's report shows where ea
   await s("DELETE", "/api/learner"); await t("DELETE", "/api/learner");
 });
 
+test("a hold that ended without a request is a talk beacon; the report counts them per state", async () => {
+  const s = session();
+  const ok = await s("POST", "/api/beacon", { event: "talk", state: "short", mode: "pcm", where: "practice", seconds: 0.21, peak: 0.004, platform: "android", audio: "never stored" });
+  assert.equal(ok.body.ok, true);
+  await s("POST", "/api/beacon", { event: "talk", state: "short", mode: "pcm", where: "practice", seconds: 0.3, platform: "android" });
+  await s("POST", "/api/beacon", { event: "talk", state: "released_early", mode: "pcm", where: "first_attempt", platform: "android" });
+  const r = await (await fetch(`http://localhost:${PORT}/api/admin/testers?hours=1`, { headers: { "x-gloo-admin": "test-owner-token" } })).json();
+  const mine = r.rows.find((x) => x.talk && x.talk.short === 2);
+  assert.ok(mine, "the session with two short holds is in the report");
+  assert.deepEqual(mine.talk, { short: 2, released_early: 1 });
+  const text = await (await fetch(`http://localhost:${PORT}/api/admin/testers?hours=1&format=text`, { headers: { "x-gloo-admin": "test-owner-token" } })).text();
+  assert.match(text, /\s+talk\s+/); assert.match(text, /short x2, released_early x1/);
+  assert.doesNotMatch(text, /never stored/, "unknown beacon fields are dropped");
+});
+
 // ---- Owner API: the lesson store behind ADMIN_TOKEN ----
 const owner = (token = "test-owner-token") => async (method, path, body, extra = {}) => {
   const res = await fetch(`http://localhost:${PORT}${path}`, {

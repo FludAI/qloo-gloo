@@ -3,7 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { callQloo, readiness, OPERATIONS } from "./qloo.mjs";
+import { callQloo, readinessCached, OPERATIONS } from "./qloo.mjs";
 import { findPersonalData } from "./guard.mjs";
 import { cached, remember } from "./cache.mjs";
 import { toItems } from "./normalize.mjs";
@@ -135,13 +135,19 @@ async function runQloo(sid, op, args) {
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 
 app.get("/api/health", wrap(async (req, res) => {
+  // Health never waits on the Qloo harness: the last known readiness answers at once, a live check runs behind it
+  // (qloo.mjs readinessCached). Each part is timed, so a slow health names its slow part in the log.
+  const t0 = performance.now(), took = {};
+  const timed = async (name, fn) => { const s = performance.now(); try { return await fn(); } finally { took[name] = Math.round(performance.now() - s); } };
   let qloo = { mode: MOCK ? "mock" : "live", ready: false };
   if (!MOCK) {
-    try { qloo.ready = (await readiness()).ready; } catch (e) { qloo = { mode: "live", ready: false, error: e.message }; }
+    const r = await timed("qloo", () => readinessCached());
+    qloo = { mode: "live", ready: r.ready, ...(r.pending && { pending: true }), ...(r.error && { error: r.error }) };
   }
   const agent = agentMode() === "live" ? { mode: "live", model: MODEL } : MOCK ? { mode: "synthetic" } : { mode: "unavailable" };
-  const stt = MOCK ? "mock" : await sttMode();
-  const [tts, mediaMode] = await Promise.all([ttsMode(), media.mode()]);
+  const stt = MOCK ? "mock" : await timed("stt", sttMode);
+  const [tts, mediaMode] = await Promise.all([timed("tts", ttsMode), timed("media", media.mode)]);
+  if (performance.now() - t0 > 2000) console.warn(`health slow: ${Object.entries(took).map(([k, v]) => `${k} ${v}ms`).join(" ")}`);
   res.json({ qloo, agent, stt, tts, voice: tts === "google" ? VOICE : null, media: mediaMode, camera: agentMode() === "live" ? "live" : MOCK ? "mock" : "unavailable",
     taste: { signals: signalsFor(req.sid).length, min_picks: MIN_PICKS, reserve: TASTE_RESERVE, entities: knownEntities() },
     gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), admin: Boolean(ADMIN_TOKEN), lessons: listTerms().length, engine: ENGINE, schedule_policy: POLICY.version,
@@ -219,8 +225,9 @@ app.post("/api/terms/:id/first-attempt", (req, res) => {
   res.json({ saved: true, pieces });
 });
 
-// ---- Gate beacons: what the client saw at the camera gate (live, denied, unavailable, slow), for the testers report ----
-const BEACON_FIELDS = ["state", "source", "error", "reason", "in_app", "platform", "slow"];
+// ---- Beacons: what the client saw at the camera gate (live, denied, unavailable, slow) and at the mic (a hold that
+// ended without a request: released early, short, silent, refused), for the testers report ----
+const BEACON_FIELDS = ["state", "source", "error", "reason", "in_app", "platform", "slow", "mode", "where", "seconds", "peak"];
 app.post("/api/beacon", (req, res) => {
   const event = String(req.body?.event ?? "").slice(0, 24);
   if (!/^[a-z_]+$/.test(event)) return res.status(400).json({ error: "event is required" });
@@ -757,4 +764,6 @@ app.use((err, _req, res, _next) => {
 });
 
 media.mode().then((m) => console.log(`media: ${m}`)); // choose the store now, not on the first request
+// The Qloo harness is spawned at boot, so the first visitor's health does not pay for it.
+if (!MOCK) readinessCached({ timeoutMs: 0 }).catch(() => {});
 app.listen(PORT, () => console.log(`qloo-gloo on :${PORT} · Qloo ${MOCK ? "MOCK" : "live"} · agent ${agentMode()} · engine ${ENGINE}${PASSCODE ? " · passcode gate on" : ""}`));

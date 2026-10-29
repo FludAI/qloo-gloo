@@ -68,3 +68,23 @@ export async function readiness() {
     contract_version: cap.structuredContent?.contract_version ?? null,
   };
 }
+
+// Readiness for health checks: the last known answer, at once, while it is fresh; otherwise a live check raced
+// against a short timeout. On timeout the last known value (or false) comes back marked `pending` and the live
+// check finishes in the background and fills the cache. Health never waits long on the harness; the first
+// caller after a cold start sees `pending` and the next sees the answer.
+let lastReadiness = null; // { ready, contract_version, at }
+let readinessInFlight = null;
+export function resetReadinessCache() { lastReadiness = null; readinessInFlight = null; }
+export function readinessCached({ timeoutMs = 1500, maxAgeMs = 5 * 60e3, check = readiness, now = Date.now } = {}) {
+  const t = now();
+  if (lastReadiness && t - lastReadiness.at < maxAgeMs) return Promise.resolve({ ready: lastReadiness.ready, contract_version: lastReadiness.contract_version, pending: false });
+  readinessInFlight ??= check().then((r) => { lastReadiness = { ready: Boolean(r.ready), contract_version: r.contract_version ?? null, at: now() }; return { ready: lastReadiness.ready, contract_version: lastReadiness.contract_version, pending: false }; })
+    .catch((e) => ({ ready: false, contract_version: null, pending: false, error: e.message }))
+    .finally(() => { readinessInFlight = null; });
+  const stale = () => ({ ready: lastReadiness?.ready ?? false, contract_version: lastReadiness?.contract_version ?? null, pending: true });
+  if (timeoutMs <= 0) return readinessInFlight;
+  let timer;
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(stale()), timeoutMs); });
+  return Promise.race([readinessInFlight, timeout]).finally(() => clearTimeout(timer));
+}

@@ -7,7 +7,7 @@ import { MicIcon } from "./Icons.jsx";
 // promptId: the practice prompt being answered, so the server can tell the recognizer what to expect.
 export default function SayIt({ health, guard, onText, onLevel, onListening, big = false, label, promptId }) {
   const talk = useHoldToTalk({
-    stt: health?.stt,
+    stt: health?.stt, where: promptId ? "practice" : "first_attempt",
     onPcm: ({ pcm16 }) => guard(async () => {
       const r = await api.transcribe(pcm16, promptId);
       if (!r.transcript) throw new Error("Didn't catch that. Try again.");
