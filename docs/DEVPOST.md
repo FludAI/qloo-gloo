@@ -44,6 +44,10 @@ That is the idea of Gloo. Pull out the meaning a word already carries (*chole* =
 
 A song can bring you into a word. The word can bring you into the science. Understanding the science can change what catches your attention next.
 
+![Cholecystokinin splits into chole, cysto, kin and in; each piece connects to a hook; the gecko paw lights a toe per syllable](https://gloo.news/devpost/inspiration.svg)
+
+*The word gives up the meaning it carries, each piece connects to something you already know, and a toe lights per syllable as the voice says it.*
+
 The gecko on my logo holds a wall through millions of tiny contacts. Gloo builds connections that help understanding stick, and each toe lights up as you learn a syllable.
 
 The Qloo hackathon gave me a way to ground those connections in taste. An LLM can propose an analogy. Qloo helps me rank sound-matched cultural choices using the learner's picks. The learner chooses the connection, and practice tells me whether it helped.
