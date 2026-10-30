@@ -26,6 +26,7 @@ javascript, node.js, react, vite, tailwind, express, sqlite, qloo, qloo-api, mcp
 https://gloo.news
 https://qloo.gloo.news
 https://github.com/FludAI/qloo-gloo
+https://github.com/FludAI/qloo-gloo-degrees
 ```
 
 ## Video demo link
@@ -101,7 +102,7 @@ Gloo is a camera overlay, like a lens for words. No typing, no reading, no forms
 
 ## Two worlds: gloo.news and qloo.gloo.news
 
-Gloo runs at two addresses from two repositories, on purpose.
+Gloo runs at two addresses from two repositories, on purpose: [FludAI/qloo-gloo](https://github.com/FludAI/qloo-gloo) for the learner's app, [FludAI/qloo-gloo-degrees](https://github.com/FludAI/qloo-gloo-degrees) for the build that measures it.
 
 **gloo.news** is the learner's app, the build in this repository. The loop above is all a learner sees: the word comes apart, the hooks come from their own culture, Qloo ranks the cards from their first pick on, and the review schedule brings the word back.
 
