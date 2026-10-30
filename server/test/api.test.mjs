@@ -348,6 +348,7 @@ test("health reports capture capabilities and the gate state", async () => {
   assert.equal(h.stt, "mock");
   assert.equal(h.tts, "google");
   assert.equal(h.media, "local");
+  assert.deepEqual(h.memory, { snapshots: "off", every_ms: 300000, instances_assumed: 1, restored_from: null, last_snapshot: null }, "in-memory database: no snapshots");
   assert.equal((await s("POST", "/api/unlock", { code: "anything" })).body.unlocked, true);
 });
 

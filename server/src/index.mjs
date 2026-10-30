@@ -9,7 +9,9 @@ import { cached, remember } from "./cache.mjs";
 import { toItems } from "./normalize.mjs";
 import { mockQloo } from "./mock.mjs";
 import { take } from "./limits.mjs";
-import { db, q, exportLearner, deleteLearner } from "./db.mjs";
+import { db, q, writes, exportLearner, deleteLearner } from "./db.mjs";
+import { createSnapshotter, restoredFrom, enabled as snapshotsEnabled, DB_PATH, EVERY_MS as SNAPSHOT_EVERY_MS } from "./snapshot.mjs";
+let snapshots = null; // the snapshot timer (snapshot.mjs), once the server listens
 import { testersReport, testersText } from "./testers.mjs";
 import { assess, promptHints, bestHeard } from "./assess.mjs";
 import { deriveSkill, POLICY } from "./scheduler.mjs";
@@ -152,6 +154,7 @@ app.get("/api/health", wrap(async (req, res) => {
     taste: { signals: signalsFor(req.sid).length, min_picks: MIN_PICKS, reserve: TASTE_RESERVE, entities: knownEntities() },
     gated: Boolean(PASSCODE), unlocked: unlocked(req.sid), admin: Boolean(ADMIN_TOKEN), lessons: listTerms().length, engine: ENGINE, schedule_policy: POLICY.version,
     credits: { rules: credits.RULES, welcome: credits.CONFIG.welcome, word: credits.CONFIG.word, referral: credits.CONFIG.referral },
+    memory: { snapshots: snapshotsEnabled() ? "on" : "off", every_ms: SNAPSHOT_EVERY_MS, instances_assumed: 1, restored_from: restoredFrom(), last_snapshot: snapshots?.last() ?? null },
     unavailable: ["pronunciation scoring", "glasses input", "mastery bonus", "encounter detection"] });
 }));
 
@@ -611,9 +614,11 @@ app.get("/api/admin/lessons", admin, (req, res) => res.json(lessons.summaries())
 app.get("/api/admin/testers", admin, (req, res) => {
   const hours = Math.min(24 * 30, Math.max(0.1, Number(req.query.hours ?? 48) || 48));
   const report = testersReport(db, { since: Date.now() - hours * 3600e3 });
-  if (req.query.format === "text") return res.type("text/plain").send(testersText(report));
-  res.json(report);
+  if (req.query.format === "text") return res.type("text/plain").send(restoredLine() + testersText(report));
+  res.json({ ...report, restored_from: restoredFrom() });
 });
+// The line the report opens with after a restore: the memory the rows come from spans a redeploy.
+const restoredLine = () => { const r = restoredFrom(); return r ? `restored from the snapshot taken ${new Date(r.taken_at).toISOString()}${r.revision ? ` by ${r.revision}` : ""}${r.late ? " (late, before any write here)" : ""}\n\n` : ""; };
 
 app.get("/api/admin/lessons/:id", admin, (req, res) => {
   const doc = lessons.get(req.params.id);
@@ -766,4 +771,6 @@ app.use((err, _req, res, _next) => {
 media.mode().then((m) => console.log(`media: ${m}`)); // choose the store now, not on the first request
 // The Qloo harness is spawned at boot, so the first visitor's health does not pay for it.
 if (!MOCK) readinessCached({ timeoutMs: 0 }).catch(() => {});
-app.listen(PORT, () => console.log(`qloo-gloo on :${PORT} · Qloo ${MOCK ? "MOCK" : "live"} · agent ${agentMode()} · engine ${ENGINE}${PASSCODE ? " · passcode gate on" : ""}`));
+const server = app.listen(PORT, () => console.log(`qloo-gloo on :${PORT} · Qloo ${MOCK ? "MOCK" : "live"} · agent ${agentMode()} · engine ${ENGINE}${PASSCODE ? " · passcode gate on" : ""}`));
+// Learner memory across redeploys (snapshot.mjs): the database to the store on a timer and at SIGTERM; boot.mjs restored it.
+if (snapshotsEnabled()) snapshots = createSnapshotter({ db, path: DB_PATH, media, writes }).start({ server });

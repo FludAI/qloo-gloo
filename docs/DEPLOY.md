@@ -116,13 +116,31 @@ gcloud beta run domain-mappings describe --domain app.gloo.news --region $REGION
 
 ## Why one warm instance
 
-SQLite lives on the instance's `/tmp`, which Cloud Run keeps in memory and
-drops when the instance stops. Spoken clips and pictures are not affected: they
-live in the media bucket (above). `--min-instances 1 --max-instances 1` keeps a
-single warm instance so learner sessions persist for the judging window, and
-keeps all sessions on one database. A new revision starts with an empty
-database. For durable multi-instance hosting, move `server/src/db.mjs` to Cloud
-SQL for Postgres; the queries are plain SQL.
+SQLite lives on the instance's writable layer, which Cloud Run keeps in memory
+and drops when the instance stops. Spoken clips and pictures are not affected:
+they live in the media bucket (above). `--min-instances 1 --max-instances 1`
+keeps a single warm instance so learner sessions persist, and keeps all
+sessions on one database.
+
+The database also survives a redeploy (`server/src/snapshot.mjs`): every five
+minutes when it changed, and once more at SIGTERM, the file is copied with
+SQLite's online backup to the media bucket as `db/gloo.sqlite`, with a sidecar
+`db/gloo.sqlite.json` (time, sha256, size, revision, row counts) and a dated copy
+once a day kept seven days. `server/src/boot.mjs` (the container's entry)
+restores the copy before the database opens when it is newer than the local
+file, after checking its sha256 and `PRAGMA integrity_check`; for 90 s after
+boot it re-checks the sidecar, so a snapshot written by the revision being
+replaced still lands as long as nothing was written here yet. Everything in
+the file comes along: learners, attempts and the practice schedule, picks,
+drafted lessons, the credits ledger, the Qloo cache, beacons and call rows.
+`/api/health` shows `memory` (the last snapshot, what boot restored from), and
+the testers report opens with the restore line. This assumes one instance:
+raise `--max-instances` and two instances would restore the same file and
+diverge, so set `SNAPSHOT=0` first. The loss window is one timer interval when
+the instance dies without SIGTERM. The first deploy after this lands finds no
+snapshot and starts empty; every one after it restores. For durable
+multi-instance hosting, move `server/src/db.mjs` to Cloud SQL for Postgres; the
+queries are plain SQL.
 
 ## Cost and quota controls
 
@@ -135,6 +153,7 @@ Environment variables (defaults shown):
 | `LIMIT_AGENT_PER_SESSION_HOUR` | `8` | Agent runs per browser session per hour |
 | `LIMIT_AGENT_GLOBAL_DAY` | `300` | Agent runs per day across all visitors |
 | `LIMIT_QLOO_PER_SESSION_HOUR` | `60` | Qloo calls per session per hour (cache hits are free) |
+| `SNAPSHOT` / `SNAPSHOT_EVERY_MS` | on when `DB_PATH` is a file / `300000` | Database snapshots to the media store (above); `SNAPSHOT=0` turns them off. `SNAPSHOT_SHUTDOWN_MS` (7000) bounds the SIGTERM snapshot, `SNAPSHOT_RECHECK_MS` (90000) the sidecar re-check after boot |
 | `LIMIT_QLOO_GLOBAL_DAY` | `150` | Qloo calls per day across all visitors (cache hits are free; cached answers persist in SQLite for `QLOO_CACHE_TTL_HOURS`, default 168) |
 | `LIMIT_STT_PER_SESSION_HOUR` | `40` | Transcriptions per session per hour |
 | `LIMIT_CAMERA_PER_SESSION_HOUR` | `40` | Camera reads per session per hour |

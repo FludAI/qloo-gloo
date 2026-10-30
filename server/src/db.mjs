@@ -2,13 +2,22 @@
 // Local: server/data/gloo.db. Cloud Run: set DB_PATH (see docs/DEPLOY.md for durability notes).
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+import { DB_PATH as path } from "./snapshot.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const path = process.env.DB_PATH ?? resolve(here, "../data/gloo.db");
 if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
 export const db = new DatabaseSync(path);
+// How many writing statements ran on this connection (snapshot.mjs: a newer snapshot may replace the database
+// only while this is 0). Every module prepares its statements through db.prepare, so the count is complete.
+export const writes = { n: 0 };
+{
+  const prepare = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const st = prepare(sql);
+    if (/^\s*(INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql)) { const run = st.run.bind(st); st.run = (...a) => { writes.n++; return run(...a); }; }
+    return st;
+  };
+}
 
 db.exec(`
 PRAGMA journal_mode = WAL;
