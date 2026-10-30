@@ -24,12 +24,13 @@ javascript, node.js, react, vite, tailwind, express, sqlite, qloo, qloo-api, mcp
 
 ```
 https://gloo.news
+https://qloo.gloo.news
 https://github.com/FludAI/qloo-gloo
 ```
 
 ## Video demo link
 
-_Record on a phone over a printed word: gate, frame, "gloo it", the pieces, two pick cards, the paw lighting per syllable, practice, progress. Under two minutes._
+_The YouTube link to the 170-second demo: the gloo.news loop, then degrees of Qloo at qloo.gloo.news._
 
 ## Project story (Markdown)
 
@@ -86,7 +87,7 @@ Gloo is a camera overlay, like a lens for words. No typing, no reading, no forms
 
    *The pieces together, the gecko paw below. A toe lights per syllable as the voice says the word.*
 
-5. **The culture learns you.** From your second pick on, Qloo ranks the next cards for your taste. The pictures stay the ones that carry the sound; the ones you are likeliest to love come first. Your progress card says "3 of your 4 hooks came from your taste."
+5. **The culture learns you.** From your first pick on, Qloo ranks the cards still ahead for your taste; a card you already picked keeps its order. The pictures stay the ones that carry the sound; the ones you are likeliest to love come first. Your progress card says "2 of your 4 hooks came from your taste."
 
    ![The review grid and the hooks that came from your taste](https://gloo.news/devpost/08-progress-taste.jpg)
 
@@ -97,6 +98,20 @@ Gloo is a camera overlay, like a lens for words. No typing, no reading, no forms
    ![One spoken question, hooks hidden](https://gloo.news/devpost/07-practice.jpg)
 
    *One spoken question at a time, hooks hidden, scored on the server.*
+
+## Two worlds: gloo.news and qloo.gloo.news
+
+Gloo runs at two addresses from two repositories, on purpose.
+
+**gloo.news** is the learner's app, the build in this repository. The loop above is all a learner sees: the word comes apart, the hooks come from their own culture, Qloo ranks the cards from their first pick on, and the review schedule brings the word back.
+
+**qloo.gloo.news** is the same app built to measure itself. Every session is dealt a degree of Qloo at random, or forced with `?qloo=0..3`: 0 is the editorial lesson, 1 reranks its cards, 2 builds the cards from Qloo, 3 opens the door to an agent that proposes hooks with Qloo's tools. Every session also draws a model arm, Claude or Meta's Muse Spark, so the same word can be drafted by either. A report splits every outcome by degree and by arm: cards shown, picks, how often the first tile wins, calls and tokens, practice answers.
+
+That build also remembers. Each learner has a node log (words met, picks as public entities, the kind of hook each pick made, every answer with its review stage), a taste vector built from Qloo's tags over their picks, and a standing brief that the drafter and the agent read, so a new word's hooks are sought in the domains that learner already likes. The database survives redeploys. A learning record, one line per card shown, keeps what was offered, how Qloo ordered it, what was picked and how a judge scored the hook's sound, so the prompts can be improved against evidence and, later, a model trained on it.
+
+To fill that report before real learners arrive, simulated learners walk the live service: film and TV characters whose tastes are public and on screen, seeded as taste signals, playing through the same API at a forced degree and arm. They are marked synthetic, kept out of the human tables by default, and never presented as users. What they measure is fidelity: whether Qloo's order agrees with a canon-grounded judgment of what that character would pick, and how the two model arms compare on the sound of their hooks.
+
+This is how the system learns with Gloo and Qloo together: Qloo supplies the taste, Gloo supplies the word and the outcome, and the record of which hooks held is the ground the next lesson stands on. The question the second build exists to answer, whether a hook from your own taste holds a word longer, is instrumented and not yet answered. That needs people who come back.
 
 ## How I built it
 
@@ -153,7 +168,7 @@ Stickiness is a property of connections, and learning can change both ends of a 
 
 - Open the proposal path, so other people and agents improve lessons and are rewarded on what learners recall, not on acceptance.
 - Add a stage label from each learner's path through words, from exploration to graduation to chief, with Qloo audiences naming the clusters.
-- Randomize taste-matched versus editorial connections for a share of learners and measure delayed pronunciation, meaning and transfer separately.
+- Run the degrees experiment at qloo.gloo.news with real learners: recall at one, three and seven days, split by whether the hook came from taste, and by degree and model arm.
 - Test both directions: whether taste-matched connections improve learning, and whether that learning changes what people recognize, choose and explore next.
 - Explore how learning connects people to others in their domain, and how those relationships bring them back to new words and ideas.
 - Make smart glasses the first-class surface. The whole app is already light on black, square, and spoken.
